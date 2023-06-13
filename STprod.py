@@ -141,9 +141,9 @@ def main():
     df_to_json_format['DateYAxis'] =  df_to_json_format['Date']
     df_to_json_format['DateYAxis'] =  pd.to_datetime(df_to_json_format['Date'])
 
-    #CHANGING DATE TO OBJECT TYPE AND SPELL OUT FORMAT
+    # CHANGING DATE TO OBJECT TYPE AND SPELL OUT FORMAT
     df_to_json_format['Date'] =  pd.to_datetime(df_to_json_format['Date'])
-    #df_to_json_format['Date'] = df_to_json_format['Date'].dt.strftime('%Y-%m-%d')
+    # df_to_json_format['Date'] = df_to_json_format['Date'].dt.strftime('%Y-%m-%d')
     df_to_json_format['Date'] = df_to_json_format['Date'].dt.strftime('%B %d, %Y')
 
 
