@@ -11,16 +11,16 @@ def main():
     updateMonthlyData()
     updateCumMoData()
 
-
 def updateMonthlyData():
+    # Read ST daily data file, group by Well Name, Year, and Month
     df_daily = pd.read_csv('data.csv')
     df_daily['Date'] = pd.to_datetime(df_daily['Date'])
     df_daily['Month'] = df_daily['Date'].dt.month
     df_daily['Year'] = df_daily['Date'].dt.year
-
     grouped = df_daily.groupby(['Well Name', 'Year', 'Month'])
+    
+    # Sum all groups (sum up production from each month), format date column & drop other columns
     monthly_sum = grouped.sum().reset_index()
-
     monthly_sum['Date'] = pd.to_datetime(monthly_sum[['Year', 'Month']].assign(day=1))
     monthly_sum = monthly_sum.drop('Year', axis=1)
     monthly_sum = monthly_sum.drop('Month', axis=1)
@@ -31,17 +31,16 @@ def updateMonthlyData():
     monthly_sum.to_json("../prod-1/data/dataMonthlyST.json", orient='values', date_format='iso')
     #------------------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-----------------------------------------#
 
-
 def updateCumMoData():
+    # Sum production data by month
     df_daily = pd.read_csv('data.csv')
     df_daily['Date'] = pd.to_datetime(df_daily['Date'])
     df_daily['Month'] = df_daily['Date'].dt.month
     df_daily['Year'] = df_daily['Date'].dt.year
-
     grouped = df_daily.groupby(['Well Name', 'Year', 'Month'])
     monthly_sum = grouped.sum().reset_index()
 
-    # Calculate the cumulative sum on selected columns
+    # Calculate the cumulative sum for each well, up to date
     group = monthly_sum.groupby('Well Name')
     final_cumsum = group['Oil (BBLS)', 'Gas (MCF)', 'Water (BBLS)'].cumsum()
     monthly_sum[['Oil (BBLS)', 'Gas (MCF)', 'Water (BBLS)']] = final_cumsum
@@ -56,6 +55,5 @@ def updateCumMoData():
     # FILE DESTINATION, CHANGE TO FIT YOUR LOCAL GITHUB FOLDER. File name: "cumDataMonthlyST.json"
     monthly_sum.to_json("../prod-1/data/cumDataMonthlyST.json", orient='values', date_format='iso')
     #------------------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-----------------------------------------#
-
 
 main()
