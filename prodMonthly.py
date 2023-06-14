@@ -9,7 +9,6 @@ import json
 # RUN THIS THE START OF EVERY MONTH TO UPDATE MONTHLY PRODUCTION TO INCLUDE THE PREVIOUS MONTH
 def main():
     updateMonthlyData()
-    updateCumMoData()
 
 def updateMonthlyData():
     # Read ST daily data file, group by Well Name, Year, and Month
@@ -25,12 +24,18 @@ def updateMonthlyData():
     monthly_sum = monthly_sum.drop('Year', axis=1)
     monthly_sum = monthly_sum.drop('Month', axis=1)
 
+    monthly_sum = monthly_sum.sort_values('Date').reset_index(drop=True)
+
     monthly_sum.to_csv("monthlyDataST.csv", index=False)
 
     # FILE DESTINATION, CHANGE TO FIT YOUR LOCAL GITHUB FOLDER. File name: "dataMonthlyST.json"
     monthly_sum.to_json("../prod-1/data/dataMonthlyST.json", orient='values', date_format='iso')
     #------------------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-----------------------------------------#
 
+main()
+
+
+# Not in Use
 def updateCumMoData():
     # Sum production data by month
     df_daily = pd.read_csv('data.csv')
@@ -55,5 +60,3 @@ def updateCumMoData():
     # FILE DESTINATION, CHANGE TO FIT YOUR LOCAL GITHUB FOLDER. File name: "cumDataMonthlyST.json"
     monthly_sum.to_json("../prod-1/data/cumDataMonthlyST.json", orient='values', date_format='iso')
     #------------------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-----------------------------------------#
-
-main()
