@@ -29,13 +29,13 @@ def updateMonthlyData():
     monthly_sum.to_csv("monthlyDataST.csv", index=False)
 
     # FILE DESTINATION, CHANGE TO FIT YOUR LOCAL GITHUB FOLDER. File name: "dataMonthlyST.json"
-    monthly_sum.to_json("../prod-1/data/dataMonthlyST.json", orient='values', date_format='iso')
+    monthly_sum.to_json("../prod/data/dataMonthlyST.json", orient='values', date_format='iso')
     #------------------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-----------------------------------------#
 
 main()
 
 
-# Not in Use
+# NO LONGER IN USE
 def updateCumMoData():
     # Sum production data by month
     df_daily = pd.read_csv('data.csv')
