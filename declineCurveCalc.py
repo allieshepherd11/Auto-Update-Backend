@@ -9,16 +9,19 @@ from collections import OrderedDict
 import json
 
 def main():
-    declineCurve()
+    df_wells = pd.read_json('everyWell.json')
+    my_list = df_wells.values.tolist()
+    oneDList = [element for sublist in my_list for element in sublist]
+    for i in oneDList:
+        declineCurve(i)
 
-def declineCurve():
+def declineCurve(name):
 
     data = pd.read_csv('monthlyDataST.csv')
     # Drop unused columns, exclude current month data
-    well_name = input("Enter Well Name: ")
-    df = data[data['Well Name'] == well_name].drop(columns=['Gas (MCF)', 'Water (BBLS)', 'TP', 'CP'])
-    df_data = df.drop(df.index[-1])
-    df_data.to_csv("dectest.csv", index=False)
+    df = data[data['Well Name'] == 'Carolpick #1'].drop(columns=['Gas (MCF)', 'Water (BBLS)', 'TP', 'CP'])
+    df_format = df.drop(df.index[-1])
+    df_format.to_csv("dectest.csv", index=False)
     df_data = pd.read_csv('dectest.csv')
 
     # FOR LOOP SUMMARY
@@ -73,16 +76,16 @@ def declineCurve():
     popt, pcov = curve_fit(hyperbolicEq, t, q, p0=initial_est)
     qi_est, b_est, Di_est = popt
 
-    print("Estimated qi: ", qi_est)
-    print("Estimated b: ", b_est)
-    print("Estimated Di: ", Di_est)
+    
 
     # Generate the model curve
-    t_model = np.linspace(min(t), max(t), max(t))  # Time range for the model curve & number of elements within range
+    t_model = np.linspace(min(t), max(t)+40, 1+max(t)+40)  # Time range for the model curve & number of elements within range
     q_model = hyperbolicEq(t_model, qi_est, b_est, Di_est)
     # print(q_model)
 
-    economics(q, q_model, t_model)
+    # Save to json that will be read by 
+
+    # economics(q, q_model, t_model)
 
     # Plot the existing data + model using matplotlib
     plt.semilogy(t, q)
@@ -91,12 +94,22 @@ def declineCurve():
     plt.xlabel('Time')
     plt.ylabel('Production Rate (log scale)')
     plt.legend()
-    plt.show()
+    # plt.show()
+
+    print("Estimated qi: ", qi_est)
+    print("Estimated b: ", b_est)
+    print("Estimated Di: ", Di_est)
+
+    dict_final = {'t': t, 'q': q, 't_model': t_model, 'q_model': q_model}
+    
+    df_final = pd.DataFrame(dict_final)
+    df_final.to_csv(f'declineCurves/{name}.csv', index=False)
+    exit()
 
 def hyperbolicEq(t, qi, b, Di):
     return qi/(1+b*Di*t)**(1/b)
 
-def economics(q, q_model, t_model):
+# def economics(q, q_model, t_model):
     print("BBLS produced so far: ", sum(q))
 
     delta_t = t_model[1] - t_model[0]  # Width of each subinterval
