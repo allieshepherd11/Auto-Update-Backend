@@ -13,20 +13,29 @@ def main():
 
 def declineCurve():
 
-    # data = pd.read_csv('monthlyDataST.csv')
-    # # Drop unused columns, exclude first month data & current month data
-    # well_name = input("Enter Well Name: ")
-    # df = data[data['Well Name'] == well_name].drop(columns=['Gas (MCF)', 'Water (BBLS)', 'TP', 'CP'])
-    # df_filtered = df.drop(df.index[-1])
-    # df_filtered.to_csv("dectest.csv", index=False)
+    data = pd.read_csv('monthlyDataST.csv')
+    # Drop unused columns, exclude current month data
+    well_name = input("Enter Well Name: ")
+    df = data[data['Well Name'] == well_name].drop(columns=['Gas (MCF)', 'Water (BBLS)', 'TP', 'CP'])
+    df_data = df.drop(df.index[-1])
+    df_data.to_csv("dectest.csv", index=False)
+    df_data = pd.read_csv('dectest.csv')
 
-    df_data = pd.read_csv('decCarol.csv')
-
-    drop_index = None
-    # Months_To_Check
-    mtc = 5
-    # Range (Checks for lowest number in a range=___ after drop_index)
-    r = 10
+    # FOR LOOP SUMMARY
+    """
+    # Check the next 5 months and make sure they are not increasing, if not move on to next month
+    # Check the next 10 months from the month ^ loop ended on
+        # Check 1stmonth - 2ndmonth, if > highest_decrease, assign 2nd month as highest decrease
+        # Check 2nd mont - 3rd month, if > highest_decrease, assign 3rd month as highest decrease
+        # ...
+        # Check 9th month - 10th month, if > highest_decrease, assign 10th month as highest decrease
+    # Choose the one with the highest decrease (the month after the decrease happens)
+    # Delete everything before said month
+    """
+    drop_index = None # Index such that everything before will be dropped
+    mtc = 5 # Months_To_Check
+    r = 10 # Range of Months to check for the highest decreasing
+    
     # Loop through indexes in df_data
     for i in range(len(df_data)-mtc):
         tally = 0 # Set counter to 0
@@ -41,35 +50,18 @@ def declineCurve():
         if tally == 0: # If no values were found to be increasing, check the next 10 months for the one with the highest decrease
             highest_decrease = 0
             index = i
-            loop = 0
-            while loop < r:
-                if df_data.loc[i+loop, "Oil (BBLS)"] - df_data.loc[i+loop+1, "Oil (BBLS)"] > highest_decrease:
-                    highest_decrease = df_data.loc[i+loop, "Oil (BBLS)"] - df_data.loc[i+loop+1, "Oil (BBLS)"]
-                    index = i + loop + 1
-                    # print(index)
-                    # print(highest_decrease)
-                loop += 1
-            drop_index = index
-            # print(df_data.loc[index, "Oil (BBLS)"])
 
-            # Check 1stmonth - 2ndmonth, if > highest_decrease, assign 2nd month as highest decrease
-            # Check 2nd mont - 3rd month, if > highest_decrease, assign 3rd month as highest decrease
-            # ...
-            # Check 9th month - 10th month, if > highest_decrease, assign 10th month as highest decrease
+            # Loop starting at 0 until reaches range r
+            for loop in range(r):
+                if df_data.loc[i+loop, "Oil (BBLS)"] - df_data.loc[i+loop+1, "Oil (BBLS)"] > highest_decrease: # Check if row has the highest decrease
+                    highest_decrease = df_data.loc[i+loop, "Oil (BBLS)"] - df_data.loc[i+loop+1, "Oil (BBLS)"] # save highest decrease
+                    index = i + loop + 1 # save index of highest decrease (the row after the current one)
+            # Assign drop_index to be the index after the for loop
+            drop_index = index
             break
     
     actual_df = df_data.drop(df_data.index[0:drop_index])
-    
-    # actual_df.to_csv("dekAnswer.csv", index=False)
-    
-    # Check the next 5 months and make sure they are not increasing, if not move on to next month
-    # Check the next 10 months from the month ^ loop ended on
-    # Choose the one with the highest decrease (the month after the decrease happens)
-    # Delete everything before said month
-
-#============================================================================================================================#
-    #exit()
-    # actual_df = pd.read_csv('decCarol.csv')
+    actual_df.to_csv("dekAnswer.csv", index=False)
 
     # Create time and production lists
     t = np.arange(len(actual_df))
@@ -81,9 +73,9 @@ def declineCurve():
     popt, pcov = curve_fit(hyperbolicEq, t, q, p0=initial_est)
     qi_est, b_est, Di_est = popt
 
-    # print("Estimated qi: ", qi_est)
-    # print("Estimated b: ", b_est)
-    # print("Estimated Di: ", Di_est)
+    print("Estimated qi: ", qi_est)
+    print("Estimated b: ", b_est)
+    print("Estimated Di: ", Di_est)
 
     # Generate the model curve
     t_model = np.linspace(min(t), max(t), max(t))  # Time range for the model curve & number of elements within range
@@ -113,9 +105,5 @@ def economics(q, q_model, t_model):
 
     # Sum area under curve using trap. rule
     print('Trapezoidal (More accurate to curve): ', np.trapz(q_model, t_model))
-
     
 main()
-
-# Find date each well started
-# Graph that shows total oil produced by new wells in the last year of any given date
