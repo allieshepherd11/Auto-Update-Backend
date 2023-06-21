@@ -33,17 +33,6 @@ def updateMonthlyData():
     monthly_sum.to_json("../prod/data/dataMonthlyST.json", orient='values', date_format='iso')
     #------------------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-----------------------------------------#
 
-# RETURNS LIST OF ALL EXISTING WELLS (FROM monthlyDataST.csv)
-def updateWellList():
-    df = pd.read_csv('monthlyDataST.csv')
-    wells = df["Well Name"].to_list()
-    wells = set(wells)
-    wells = list(wells)
-
-    # Open the file in write mode
-    with open('everyWell.json', 'w') as json_file:
-        # Use the json.dump() function to write the list to the file
-        json.dump(wells, json_file)
 
 
 main()
@@ -74,3 +63,20 @@ def updateCumMoData():
     # FILE DESTINATION, CHANGE TO FIT YOUR LOCAL GITHUB FOLDER. File name: "cumDataMonthlyST.json"
     monthly_sum.to_json("../prod-1/data/cumDataMonthlyST.json", orient='values', date_format='iso')
     #------------------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-----------------------------------------#
+
+# RETURNS LIST OF ALL EXISTING WELLS (FROM monthlyDataST.csv)
+def updateWellList():
+    df = pd.read_csv('monthlyDataST.csv')
+    wells = df["Well Name"].to_list()
+    wells = set(wells)
+    wells = list(wells)
+
+    # Open the file in write mode
+    with open('everyWell.json', 'w') as json_file:
+        # Use the json.dump() function to write the list to the file
+        json.dump(wells, json_file)
+
+    with open('../prod/data/declineCurves/1wells.json', 'w') as json_file:
+        # Use the json.dump() function to write the list to the file
+        json.dump(wells, json_file)
+    

@@ -8,6 +8,7 @@ import requests
 from collections import OrderedDict
 import json
 from itertools import zip_longest
+import re
 
 # RUN prodMonthly.py BEFORE THIS TO HAVE UPDATED DECLINE CURVES
 def main():
@@ -23,7 +24,7 @@ def main():
 
     params = pd.DataFrame(params)
     # FILE DESTINATION, CHANGE TO FIT YOUR LOCAL GITHUB FOLDER. File name: "dataMonthlyST.json"
-    params.to_csv("../prod/data/declineCurves/#params.csv", index=False)
+    params.to_csv("../prod/data/declineCurves/1params.csv", index=False)
     #----------------^^^^^--------------------------------------------------------------------#
     
 def declineCurve(name):
@@ -109,8 +110,9 @@ def declineCurve(name):
         dict_final = {'t': t, 'q': q, 't_model': t_model, 'q_model': q_model}
         
         df_final = pd.DataFrame(dict_final)
+        name = name.replace("#", "").replace(" ", "")
         # FILE DESTINATION, CHANGE TO FIT YOUR LOCAL GITHUB FOLDER. File name: "dataMonthlyST.json"
-        df_final.to_csv(f"../prod/data/declineCurves/{name}DC.csv", index=False)
+        df_final.to_csv(f"../prod/data/declineCurves/{name}.csv", index=False)
         #------------------^^^^^^^----------------------------------------------------------------#
         
         return {"qi":qi_est, "di":Di_est, "b":b_est}
