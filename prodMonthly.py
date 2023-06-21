@@ -9,6 +9,7 @@ import json
 # RUN THIS THE START OF EVERY MONTH TO UPDATE MONTHLY PRODUCTION TO INCLUDE THE PREVIOUS MONTH
 def main():
     updateMonthlyData()
+    updateWellList()
 
 def updateMonthlyData():
     # Read ST daily data file, group by Well Name, Year, and Month
@@ -31,6 +32,19 @@ def updateMonthlyData():
     # FILE DESTINATION, CHANGE TO FIT YOUR LOCAL GITHUB FOLDER. File name: "dataMonthlyST.json"
     monthly_sum.to_json("../prod/data/dataMonthlyST.json", orient='values', date_format='iso')
     #------------------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-----------------------------------------#
+
+# RETURNS LIST OF ALL EXISTING WELLS (FROM monthlyDataST.csv)
+def updateWellList():
+    df = pd.read_csv('monthlyDataST.csv')
+    wells = df["Well Name"].to_list()
+    wells = set(wells)
+    wells = list(wells)
+
+    # Open the file in write mode
+    with open('everyWell.json', 'w') as json_file:
+        # Use the json.dump() function to write the list to the file
+        json.dump(wells, json_file)
+
 
 main()
 

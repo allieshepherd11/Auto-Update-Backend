@@ -9,6 +9,7 @@ from collections import OrderedDict
 import json
 from itertools import zip_longest
 
+# RUN prodMonthly.py BEFORE THIS TO HAVE UPDATED DECLINE CURVES
 def main():
     df_wells = pd.read_json('everyWell.json')
     my_list = df_wells.values.tolist()
@@ -21,9 +22,10 @@ def main():
             params[i] = well_params
 
     params = pd.DataFrame(params)
-    params.to_csv('declineCurves/aaaparams.csv', index=False)
-
-
+    # FILE DESTINATION, CHANGE TO FIT YOUR LOCAL GITHUB FOLDER. File name: "dataMonthlyST.json"
+    params.to_csv("../prod/data/declineCurves/#params.csv", index=False)
+    #----------------^^^^^--------------------------------------------------------------------#
+    
 def declineCurve(name):
     print(name)
     data = pd.read_csv('monthlyDataST.csv')
@@ -91,7 +93,7 @@ def declineCurve(name):
 
         # Generate the model curve
         t_model = np.linspace(min(t), max(t)+40, 1+max(t)+40)  # Time range for the model curve & number of elements within range
-        q_model = hyperbolicEq(t_model, qi, b_est, Di_est)
+        q_model = hyperbolicEq(t_model, qi_est, b_est, Di_est)
 
         # Pad the arrays with None values to match the maximum length
         padded = list(zip_longest(t,q,t_model,q_model,fillvalue=None))
@@ -107,8 +109,11 @@ def declineCurve(name):
         dict_final = {'t': t, 'q': q, 't_model': t_model, 'q_model': q_model}
         
         df_final = pd.DataFrame(dict_final)
-        df_final.to_csv(f'declineCurves/{name} DC.csv', index=False)
-        return {"qi":qi_est,"di":Di_est,"b":b_est}
+        # FILE DESTINATION, CHANGE TO FIT YOUR LOCAL GITHUB FOLDER. File name: "dataMonthlyST.json"
+        df_final.to_csv(f"../prod/data/declineCurves/{name}DC.csv", index=False)
+        #------------------^^^^^^^----------------------------------------------------------------#
+        
+        return {"qi":qi_est, "di":Di_est, "b":b_est}
     
     # except RuntimeWarning:
     #     print("Error: Invalid conversion to integer.")
@@ -117,7 +122,6 @@ def declineCurve(name):
         exclList.append(name)
         print("excluded: ", name)
         return None
-
 
 
 def hyperbolicEq(t, qi, b, Di):
