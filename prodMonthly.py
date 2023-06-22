@@ -33,8 +33,6 @@ def updateMonthlyData():
     monthly_sum.to_json("../prod/data/dataMonthlyST.json", orient='values', date_format='iso')
     #------------------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-----------------------------------------#
 
-
-
 main()
 
 
