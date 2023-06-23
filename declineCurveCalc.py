@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 from itertools import zip_longest
 from dateutil.relativedelta import relativedelta
 
-
 # RUN prodMonthly.py BEFORE THIS TO HAVE UPDATED DECLINE CURVES
 def main():
     df_wells = pd.read_json('everyWell.json')
