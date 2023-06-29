@@ -1,21 +1,20 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, root_scalar
 from datetime import datetime, timedelta
 from itertools import zip_longest
 from dateutil.relativedelta import relativedelta
+import json
 
 # RUN prodMonthly.py BEFORE THIS TO HAVE UPDATED DECLINE CURVES
 def main():
-    
-    manualEntry()
-
-    exit()
+    # UNCOMMENT THESE LINES TO ADD A MANUAL ENTRY
+    # manualEntry()
+    # exit()
     
     df_wells = pd.read_json('everyWell.json')
     my_list = df_wells.values.tolist()
-    print(my_list)
 
     oneDList = [element for sublist in my_list for element in sublist]
     params = {}
@@ -33,10 +32,11 @@ def main():
 def manualEntry():
     dfManual = pd.read_csv('dManualEntries.csv')
     name = input("Enter well name: ")
+    name = name.replace("#", "").replace(" ", "").lower()
     startMonth = input("Enter starting month: ")
 
-    dfNew = {'Well Name': name, 'Start': startMonth}
-    dfManual = pd.concat(dfManual, dfNew)
+    dfNew = pd.DataFrame({'Well Name': [name], 'Start': [startMonth]})
+    dfManual = pd.concat([dfManual, dfNew])
     dfManual.to_csv("dManualEntries.csv", index=False)
     
 def declineCurve(name):
@@ -52,17 +52,20 @@ def declineCurve(name):
     t_real = df_data['Date'].values.tolist()
     q_real = df_data['Oil (BBLS)'].values.tolist()
 
-    exclList = []
+    # READ MANUAL ENTRIES
+    dfManual = pd.read_csv('dManualEntries.csv')
+    formatted_name = name.replace("#", "").replace(" ", "").lower()
+    # READ EXCLUDED LIST
+    # dfExcl = pd.read_csv('dExclList.csv')
 
     try:
-        if(1==1):
-        # if well.isin(dfManual):
-            # drop_index = dfManual.loc[dfManual['Well Name']==name, 'Start'].values[0]
-        # else:
+        if formatted_name in dfManual['Well Name'].tolist():
+            drop_index = dfManual.loc[dfManual['Well Name']==formatted_name, 'Start'].values[0]
+
+        else:
             drop_index = None # Index such that everything before will be dropped
             mtc = 5 # Months_To_Check
             r = 10 # Range of Months to check for the highest decreasing
-
             # FOR LOOP SUMMARY
             """
             # Check the next 5 months and make sure they are not increasing, if not move on to next month
@@ -82,7 +85,7 @@ def declineCurve(name):
                 for index, row in df_data.iloc[i:i+mtc].iterrows(): 
                     if index==len(df_data)-1: # Break if index is at the very end of the loop (1 case)
                         break
-                    if row["Oil (BBLS)"] < df_data.loc[index+1, "Oil (BBLS)"]: # If one of the values being checked is increasing (relative to value after), add a tally
+                    if row["Oil (BBLS)"] <= df_data.loc[index+1, "Oil (BBLS)"]: # If one of the values being checked is increasing (relative to value after), add a tally
                         tally+=1
                 
                 if tally == 0: # If no values were found to be increasing, check the next 10 months for the one with the highest decrease
@@ -93,15 +96,24 @@ def declineCurve(name):
                     for loop in range(r):
                         if df_data.loc[i+loop, "Oil (BBLS)"] - df_data.loc[i+loop+1, "Oil (BBLS)"] > highest_decrease: # Check if row has the highest decrease
                             highest_decrease = df_data.loc[i+loop, "Oil (BBLS)"] - df_data.loc[i+loop+1, "Oil (BBLS)"] # save highest decrease
-                            index = i + loop + 1 # save index of highest decrease (the row after the current one)
+                            index = i + loop # save index of highest decrease (the row after the current one)
                     # Assign drop_index to be the index after the for loop
                     drop_index = index
                     break
-        
-        exit()
-        actual_df = df_data.drop(df_data.index[0:drop_index])
+
+        df_temp = df_data
+        # Get the end date for model to read from, create endDate which will be returned to be marked
+        df_end_data = pd.read_csv('dEndList.csv')
+        if formatted_name in df_end_data['Well Name'].tolist():
+            end_index = df_end_data.loc[df_end_data['Well Name']==formatted_name, 'End'].values[0]
+            df_temp = df_data.drop(df_data.index[end_index+1:len(df)-1])
+
+            endDate = df_data.iloc[end_index, 2]
+            print(endDate)
+            print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^aksjd;lkfja;lskdjf")
+            
+        actual_df = df_temp.drop(df_temp.index[0:drop_index])
         dates_model = actual_df['Date'].values.tolist()
-        # actual_df.to_csv("dekAnswer.csv", index=False)
 
         # Create time and production lists
         t = np.arange(len(actual_df))
@@ -115,12 +127,12 @@ def declineCurve(name):
         qi_est, b_est, Di_est = popt
 
         # Generate the model curve
-        extr_mo = 40 # # of extrapolated months
+        extr_mo = 100 # # of extrapolated months
         t_model = np.linspace(min(t), max(t)+extr_mo, 1+max(t)+extr_mo)  # Time range for the model curve & number of elements within range
         q_model = hyperbolicEq(t_model, qi_est, b_est, Di_est)
 
         # RUN ECONOMICS
-        q_eco, qm_eco, fp_eco, moUntilEcoLimit = economics(q, q_model, t, qi_est, b_est, Di_est, extr_mo)
+        q_eco, qm_eco, fp_eco, moUntilEcoLimit = economics(q, q_model, t, qi_est, b_est, Di_est, extr_mo, drop_index)
 
         # Pad the arrays with None values to match the maximum length
         padded = list(zip_longest(t_real,q_real,dates_model,q_model,fillvalue=None))
@@ -148,9 +160,8 @@ def declineCurve(name):
         dict_final = {'t': t_real, 'q': q_real, 't_model': dates_model, 'q_model': q_model}
         df_final = pd.DataFrame(dict_final)
 
-        name = name.replace("#", "").replace(" ", "").lower()
-        # FILE DESTINATION, CHANGE TO FIT YOUR LOCAL GITHUB FOLDER. File name: "dataMonthlyST.json"
-        df_final.to_csv(f"../prod/data/declineCurves/{name}.csv", index=False)
+        # FILE DESTINATION, CHANGE TO FIT YOUR LOCAL GITHUB FOLDER. File name: "{formatted_name}.csv"
+        df_final.to_csv(f"../prod/data/declineCurves/{formatted_name}.csv", index=False)
         #------------------^^^^^^^----------------------------------------------------------------#
         return {"qi":qi_est, "D":Di_est, "b":b_est, "extr_mo":extr_mo, "q_sum": q_eco, "qm_sum": qm_eco, "future_prod":fp_eco, "eco_limit_mo": moUntilEcoLimit}
     
@@ -158,49 +169,60 @@ def declineCurve(name):
     #     print("Error: Invalid conversion to integer.")
 
     except:
-        exclList.append(name)
+        # excluded = pd.DataFrame({'Well Name': [name]})
+        # dfExcl = pd.concat([dfExcl, excluded])
+        # dfExcl.to_csv('exclList.csv', index=False)
         # print("excluded: ", name)
         return None
-
 
 def hyperbolicEq(t, qi, b, Di):
     return qi/(1+b*Di*t)**(1/b)
 
-# Find when it hits 140
-# 
-def economics(q, q_model, time, qi_est, b_est, Di_est, extr_mo):
+def economics(q, q_model, t, qi_est, b_est, Di_est, extr_mo, drop_index):
     q_sum = sum(q)
     q_model_sum = sum(q_model)
-    future_prod = q_model_sum - q_sum #This is not entirely correct, need to subtract from q_model before extrapolate UPDATE LATER
 
-    extra_months = list(range(max(time), max(time) + extr_mo))  # Generate a range of values based on the length of t
-    time = time.tolist()
-    time += extra_months  # Concatenate the original list with the extra months)
+    # future production = Whole model - (time since actual well start - drop_index)
+    model_present_len = len(t) - drop_index
+    q_model_past_sum = sum(q_model[:model_present_len])
+    future_prod = q_model_sum - q_model_past_sum    
 
-    moUntilEcoLimit = 'infinity'
-    for i in time:  
-        if qi_est/(1+b_est*Di_est*i)**(1/b_est) <= 140:
-            moUntilEcoLimit = i
-            break
-    
-    # gasPrice = 70
-    # roy_tax = .70875
-    # operCost = 10000
+    #Calculate the amount of months it takes for the model to reach the Economic Limit
+    moUntilEcoLimit = 'infinity' # Default
+    try:
+        target_value = 140
+        def equation_minus_target(t):
+            return hyperbolicEq(t, qi_est, b_est, Di_est) - target_value
+        
+        result = root_scalar(equation_minus_target, method='brentq', bracket=[0, 260])
+        if result.converged:
+            time_hit_140 = result.root
+            # print(result)
+            # print("The equation hits 140 at time:", time_hit_140)
+            # EcoLimit = (model months + excluded months) - number of months so far
+            moUntilEcoLimit = float((time_hit_140 + drop_index) - len(t)) # Turn from numpy.float to float
+            # print(type(moUntilEcoLimit))
+        else:
+            print("Failed to find a solution.")
+    except:
+        print('EcoLimit N/A') # prints for well without graphs
 
-    # netValue = (oil*70*.70875*30) - 10000
-    
-    # discount_rate = 0.1
-    # cash_flows = [-1000, 500, 300, 200, 100]
+    # Need to Calculate the amt of barrels produced in the rest of the lifetime
+    def BBLStoUSD(bbls):
+        gasPrice = 70
+        royalties = .75
+        tax = .954
+        operCost = 10000
+        usd = (bbls * gasPrice * royalties * tax) - operCost
+        return usd
+    # print(BBLStoUSD(???))
 
-    # npv = sum(cf / (1 + discount_rate) ** n for n, cf in enumerate(cash_flows))
-
-    return q_sum, q_model_sum, future_prod, moUntilEcoLimit
+    return q_sum, q_model_sum, future_prod, moUntilEcoLimit, 
 
 main()
 
-
-# OLD CODE =========================================================================================
-
+# OLD CODE
+"""
 # Plot the existing data + model using matplotlib
 # plt.semilogy(t, q)
 # plt.plot(t, q, 'ro', label='Data')  # Data points
@@ -216,3 +238,11 @@ main()
     
 # Sum area under curve using trap. rule
 # print('Trapezoidal (More accurate to curve): ', np.trapz(q_model, t_model))
+"""
+
+# netValue = (oil*70*.70875*30) - 10000
+    
+# discount_rate = 0.1
+# cash_flows = [-1000, 500, 300, 200, 100]
+
+# npv = sum(cf / (1 + discount_rate) ** n for n, cf in enumerate(cash_flows))
