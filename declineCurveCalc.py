@@ -148,7 +148,7 @@ def declineCurve(name):
         #------------------^^^^^^^----------------------------------------------------------------#
 
         # RETURNS 'PARAMATERS'
-        return {"qi":qi_est, "D":Di_est, "b":b_est, "extr_mo":extr_mo, "q_sum": q_eco, "qm_sum": qm_eco, "future_prod":fp_eco, "eco_limit": ecoLimit, "end_index": end_index, "model_eco_limit": modelEcoLimit}
+        return {"qi":qi_est, "D":Di_est, "b":b_est, "extr_mo":extr_mo, "q_sum":q_eco, "qm_sum":qm_eco, "future_prod":fp_eco, "eco_limit":ecoLimit, "end_index":end_index, "model_eco_limit":modelEcoLimit}
     
     except:
         return None
