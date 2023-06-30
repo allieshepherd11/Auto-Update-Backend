@@ -26,15 +26,7 @@ def main():
     params.to_csv("../prod/data/declineCurves/1params.csv", index=False)
     #----------------^^^^^--------------------------------------------------------------------#
 
-def manualEntry():
-    dfManual = pd.read_csv('dManualEntries.csv')
-    name = input("Enter well name: ")
-    name = name.replace("#", "").replace(" ", "").lower()
-    startMonth = input("Enter starting month: ")
 
-    dfNew = pd.DataFrame({'Well Name': [name], 'Start': [startMonth]})
-    dfManual = pd.concat([dfManual, dfNew])
-    # dfManual.to_csv("dManualEntries.csv", index=False)
     
 def declineCurve(name):
     data = pd.read_csv('db/prod/monthlyDataST.csv')
@@ -180,6 +172,7 @@ def economics(q_real, q_model, t_model, qi_est, b_est, Di_est, extr_mo, drop_ind
 
     # Economic Limit in years
     ecoLimit = 'infinity' # Default
+    modelEcoLimit = 'infinity'
     mo_list = list(range(601)) # 600 months
     for i in mo_list:
         if hyperbolicEq(i, qi_est, b_est, Di_est) <=140:
@@ -218,6 +211,16 @@ main()
     
 # Sum area under curve using trap. rule
 # print('Trapezoidal (More accurate to curve): ', np.trapz(q_model, t_model))
+
+def manualEntry():
+    dfManual = pd.read_csv('dManualEntries.csv')
+    name = input("Enter well name: ")
+    name = name.replace("#", "").replace(" ", "").lower()
+    startMonth = input("Enter starting month: ")
+
+    dfNew = pd.DataFrame({'Well Name': [name], 'Start': [startMonth]})
+    dfManual = pd.concat([dfManual, dfNew])
+    # dfManual.to_csv("dManualEntries.csv", index=False)
 """
 
 # netValue = (oil*70*.70875*30) - 10000
