@@ -9,22 +9,19 @@ import json
 
 # RUN prodMonthly.py BEFORE THIS TO HAVE UPDATED DECLINE CURVES
 def main():
-    # UNCOMMENT THESE LINES TO ADD A MANUAL ENTRY
-    # manualEntry()
-    # exit()
-    
+    # List of every well w/ production data
     df_wells = pd.read_json('everyWell.json')
     my_list = df_wells.values.tolist()
-
     oneDList = [element for sublist in my_list for element in sublist]
+
+    # Run declineCurve(), assign returned params to df, then export to csv
     params = {}
     for well in oneDList:
         well_params = declineCurve(well)
         well = well.replace("#", "").replace(" ", "").lower()
-        # if well_params != None:
         params[well] = well_params
-
     params = pd.DataFrame(params)
+
     # FILE DESTINATION, CHANGE TO FIT YOUR LOCAL GITHUB FOLDER. File name: "dataMonthlyST.json"
     params.to_csv("../prod/data/declineCurves/1params.csv", index=False)
     #----------------^^^^^--------------------------------------------------------------------#
@@ -37,31 +34,31 @@ def manualEntry():
 
     dfNew = pd.DataFrame({'Well Name': [name], 'Start': [startMonth]})
     dfManual = pd.concat([dfManual, dfNew])
-    dfManual.to_csv("dManualEntries.csv", index=False)
+    # dfManual.to_csv("dManualEntries.csv", index=False)
     
 def declineCurve(name):
     data = pd.read_csv('db/prod/monthlyDataST.csv')
     # Drop unused columns, exclude data from the current month
     df = data[data['Well Name'] == name].drop(columns=['Gas (MCF)', 'Water (BBLS)', 'TP', 'CP'])
     df_format = df.drop(df.index[-1])
-    df_format.to_csv("dectest.csv", index=False)
-    df_data = pd.read_csv('dectest.csv') # This csv needs to be kept to run
+    df_format.to_csv("dz.csv", index=False)
+    df_data = pd.read_csv('dz.csv') # This csv needs to be kept to run
 
     # CREATE REAL DATA ARRAYS TO BE USED ON FINAL GRAPH
     # t_real = np.arange(len(df_data))
     t_real = df_data['Date'].values.tolist()
     q_real = df_data['Oil (BBLS)'].values.tolist()
 
-    # READ MANUAL ENTRIES
-    dfManual = pd.read_csv('dManualEntries.csv')
-    formatted_name = name.replace("#", "").replace(" ", "").lower()
-    # READ EXCLUDED LIST
-    # dfExcl = pd.read_csv('dExclList.csv')
 
+    # Any errors ran will return None to params
     try:
+        # Check if well is in dManualEntries.csv
+        dfManual = pd.read_csv('declStartManual.csv')
+        formatted_name = name.replace("#", "").replace(" ", "").lower()
         if formatted_name in dfManual['Well Name'].tolist():
             drop_index = dfManual.loc[dfManual['Well Name']==formatted_name, 'Start'].values[0]
 
+        # If not manual entry, run algorithm
         else:
             drop_index = None # Index such that everything before will be dropped
             mtc = 5 # Months_To_Check
@@ -101,49 +98,44 @@ def declineCurve(name):
                     drop_index = index
                     break
 
+        # Check if well is in dEndList.csv, true: drop the data after given end_index
         df_temp = df_data
-        # Get the end date for model to read from, create endDate which will be returned to be marked
-        df_end_data = pd.read_csv('dEndList.csv')
+        end_index = None
+        df_end_data = pd.read_csv('deEndManual.csv')
         if formatted_name in df_end_data['Well Name'].tolist():
             end_index = df_end_data.loc[df_end_data['Well Name']==formatted_name, 'End'].values[0]
             df_temp = df_data.drop(df_data.index[end_index+1:len(df)-1])
-
-            endDate = df_data.iloc[end_index, 2]
-            print(endDate)
-            print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^aksjd;lkfja;lskdjf")
+            # endDate = df_data.iloc[end_index, 2]
             
+        # Drop data before drop_index (given by manual entry or algorithm)
         actual_df = df_temp.drop(df_temp.index[0:drop_index])
         dates_model = actual_df['Date'].values.tolist()
 
-        # Create time and production lists
-        t = np.arange(len(actual_df))
-        q = actual_df['Oil (BBLS)'].values.tolist()
+
+        # Create time & production lists
+        t = np.arange(len(actual_df)) # List of indexes of dates
+        q = actual_df['Oil (BBLS)'].values.tolist() # list of production data
         qi = q[0]
 
-        initial_estimate = [qi, .8, .4]
-
         # Curve fit to hyperbolicEq, using t, q, and initial_estimate
+        initial_estimate = [qi, .8, .4]
         popt, pcov = curve_fit(hyperbolicEq, t, q, p0=initial_estimate)
         qi_est, b_est, Di_est = popt
 
-        # Generate the model curve
-        extr_mo = 100 # # of extrapolated months
-        t_model = np.linspace(min(t), max(t)+extr_mo, 1+max(t)+extr_mo)  # Time range for the model curve & number of elements within range
-        q_model = hyperbolicEq(t_model, qi_est, b_est, Di_est)
+        extr_mo = 100 # extrapolated months
+        t_model = np.linspace(min(t), max(t)+extr_mo, 1+max(t)+extr_mo)  # Array of time indexes (start, stop, # of data points)
+        q_model = hyperbolicEq(t_model, qi_est, b_est, Di_est) # Generate the model curve from best fit data
 
-        # RUN ECONOMICS
-        q_eco, qm_eco, fp_eco, moUntilEcoLimit = economics(q, q_model, t, qi_est, b_est, Di_est, extr_mo, drop_index)
+        # RUN economics() ======================================================================================
+        q_eco, qm_eco, fp_eco, ecoLimit, modelEcoLimit = economics(q_real, q_model, t_model, qi_est, b_est, Di_est, extr_mo, drop_index)
+        # ======================================================================================================
 
-        # Pad the arrays with None values to match the maximum length
-        padded = list(zip_longest(t_real,q_real,dates_model,q_model,fillvalue=None))
+        # Format lists
+        padded = list(zip_longest(t_real,q_real,dates_model,q_model,fillvalue=None)) # Pad the arrays with None values to match the maximum length
         transposed = list(zip(*padded))
         # Create separate lists for each index
         result = [list(column) for column in transposed]
-
-        t_real = result[0]
-        q_real = result[1]
-        dates_model = result[2]
-        q_model = result[3]
+        t_real, q_real, dates_model, q_model = result[0], result[1], result[2], result[3]
 
         # EXTRAPOLATE THE DATES FOR dates_model
         # Find the last non-blank date in the array
@@ -156,56 +148,44 @@ def declineCurve(name):
             last_date += relativedelta(months=1)  # Increment by one month
             dates_model[i] = last_date.strftime('%Y-%m-%d')
 
-        # CREATE FINAL DATAFRAME
+        # CREATE FINAL CSVs PER EACH WELL
         dict_final = {'t': t_real, 'q': q_real, 't_model': dates_model, 'q_model': q_model}
         df_final = pd.DataFrame(dict_final)
-
         # FILE DESTINATION, CHANGE TO FIT YOUR LOCAL GITHUB FOLDER. File name: "{formatted_name}.csv"
         df_final.to_csv(f"../prod/data/declineCurves/{formatted_name}.csv", index=False)
         #------------------^^^^^^^----------------------------------------------------------------#
-        return {"qi":qi_est, "D":Di_est, "b":b_est, "extr_mo":extr_mo, "q_sum": q_eco, "qm_sum": qm_eco, "future_prod":fp_eco, "eco_limit_mo": moUntilEcoLimit}
-    
-    # except RuntimeWarning:
-    #     print("Error: Invalid conversion to integer.")
 
+        # RETURNS 'PARAMATERS'
+        return {"qi":qi_est, "D":Di_est, "b":b_est, "extr_mo":extr_mo, "q_sum": q_eco, "qm_sum": qm_eco, "future_prod":fp_eco, "eco_limit": ecoLimit, "end_index": end_index, "model_eco_limit": modelEcoLimit}
+    
     except:
+        return None
         # excluded = pd.DataFrame({'Well Name': [name]})
         # dfExcl = pd.concat([dfExcl, excluded])
         # dfExcl.to_csv('exclList.csv', index=False)
         # print("excluded: ", name)
-        return None
 
 def hyperbolicEq(t, qi, b, Di):
     return qi/(1+b*Di*t)**(1/b)
 
-def economics(q, q_model, t, qi_est, b_est, Di_est, extr_mo, drop_index):
-    q_sum = sum(q)
+def economics(q_real, q_model, t_model, qi_est, b_est, Di_est, extr_mo, drop_index):
+    q_sum = sum(q_real)
     q_model_sum = sum(q_model)
 
-    # future production = Whole model - (time since actual well start - drop_index)
-    model_present_len = len(t) - drop_index
-    q_model_past_sum = sum(q_model[:model_present_len])
-    future_prod = q_model_sum - q_model_past_sum    
+    modelPassedMo = len(q_real)-drop_index # Number of months of the model that have passed
 
-    #Calculate the amount of months it takes for the model to reach the Economic Limit
-    moUntilEcoLimit = 'infinity' # Default
-    try:
-        target_value = 140
-        def equation_minus_target(t):
-            return hyperbolicEq(t, qi_est, b_est, Di_est) - target_value
-        
-        result = root_scalar(equation_minus_target, method='brentq', bracket=[0, 260])
-        if result.converged:
-            time_hit_140 = result.root
-            # print(result)
-            # print("The equation hits 140 at time:", time_hit_140)
-            # EcoLimit = (model months + excluded months) - number of months so far
-            moUntilEcoLimit = float((time_hit_140 + drop_index) - len(t)) # Turn from numpy.float to float
-            # print(type(moUntilEcoLimit))
-        else:
-            print("Failed to find a solution.")
-    except:
-        print('EcoLimit N/A') # prints for well without graphs
+    q_model_past_sum = sum(q_model[:modelPassedMo]) # Sums from the beginning of model to the current month (sum is exclusive of end index)
+    # Future Production = Entire model - Section of model from the past
+    future_prod = q_model_sum - q_model_past_sum
+
+    # Economic Limit in years
+    ecoLimit = 'infinity' # Default
+    mo_list = list(range(601)) # 600 months
+    for i in mo_list:
+        if hyperbolicEq(i, qi_est, b_est, Di_est) <=140:
+            modelEcoLimit = i
+            ecoLimit = (i-modelPassedMo)/12
+            break
 
     # Need to Calculate the amt of barrels produced in the rest of the lifetime
     def BBLStoUSD(bbls):
@@ -217,7 +197,7 @@ def economics(q, q_model, t, qi_est, b_est, Di_est, extr_mo, drop_index):
         return usd
     # print(BBLStoUSD(???))
 
-    return q_sum, q_model_sum, future_prod, moUntilEcoLimit, 
+    return q_sum, q_model_sum, future_prod, ecoLimit, modelEcoLimit
 
 main()
 
