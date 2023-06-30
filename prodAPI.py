@@ -9,6 +9,7 @@ import os
 import boto3
 from dotenv import load_dotenv
 import time
+from iWellApi import well_comments,well_field_value,well_production,well_group,single_well_group,init,me
 
 
 def main(field):#ET / ST
@@ -72,12 +73,10 @@ def main(field):#ET / ST
         ##analyze(df)
         df.drop(['30DMA', 'MA Ratio'], inplace=True, axis = 1)
     
-    
     dfoil = df.groupby(['Well Name'])['Oil (BBLS)'].sum().divide(1000).astype(float).reset_index().round(1)
     dfwater = df.groupby(['Well Name'])['Water (BBLS)'].sum().divide(1000).astype(float).reset_index().round(1)
     dfgas = df.groupby(['Well Name'])['Gas (MCF)'].sum().divide(1000).astype(int).reset_index()
     
-  
     #df_formations = get_formations()
 
     dfsum = dfoil.merge(dfwater, on='Well Name').merge(dfgas, on='Well Name')#.merge(df_formations, on='Well Name')
@@ -127,12 +126,11 @@ def main(field):#ET / ST
         suff = field
         dfsum = addFormations(dfsum)
         df_to_json_format = df_to_json_format[["Well Name", "Date", "Oil (BBLS)","Gas (MCF)", "Water (BBLS)", "TP", "CP", "Comments","Total Fluid", "DateYAxis"]]
+    
     df_to_json_format.to_json(f"db\\prod{field}\\update\\allProductionData{suff}.json", orient='values', date_format='iso') #updating loc json file
     dfsum.to_json(f"db\\prod{field}\\update\\cumProd{suff}.json", orient='values', date_format='iso')
     #df_formations.to_json("db\\prodST\\formations.json", orient='values', date_format='iso')
     #df_info.to_json("pumpinfo.json", orient='values', date_format='iso')
-
-
     #pump_info()
     #get_formations()
 
@@ -240,79 +238,7 @@ def importDataIwell(start,field):
     dfimport = dfimport.reset_index(drop=True)
     
     return dfimport,updates
-   
-def init():
-    body = {
-        "grant_type": "password",
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "username": username,
-        "password": password
-    }
-    r=requests.post('https://api.iwell.info/v1/oauth2/access-token', headers={"content-type":"application/json"}, json = body)
-    return(r.json()['access_token'])
 
-def me(token):
-    x = requests.get('https://api.iwell.info/v1/me', headers={'Authorization': f'Bearer {token}'})
-    print(f'The current user is {x.json()["data"]["name"]}')
-
-def wells(token):
-    x = requests.get('https://api.iwell.info/v1/wells', headers={'Authorization': f'Bearer {token}'})
-    data = x.json()['data']
-    print(data[0])
-
-def well_group(token):
-    group_dict = {}
-    x = requests.get('https://api.iwell.info/v1/well-groups', headers={'Authorization': f'Bearer {token}'})
-    data = x.json()['data']
-    [group_dict.update({i['name']: i['id']}) for i in data]
-    #print("well group:",group_dict)
-    return(group_dict)
-
-def single_well_group(token, group_id):
-    well_dict = {}
-    x = requests.get(f'https://api.iwell.info/v1/well-groups/{group_id}/wells', headers={'Authorization': f'Bearer {token}'})
-    data = x.json()['data']   
-    [well_dict.update({i['name']: i['id']}) for i in data] 
-    return(well_dict)
-
-def well_production(token, well_id,time_since,cnt=[]):#time_since = 0 gives last 30 days
-    cnt.append(0)
-    x = requests.get(f'https://api.iwell.info/v1/wells/{well_id}/production?&since={time_since}', headers={'Authorization': f'Bearer {token}'})
-    prod_data = []
-    try:
-        data = x.json()['data']   
-        for i in data:
-            prod_data.append(i)
-        return prod_data,cnt,x
-    except:
-        return prod_data,cnt,x
-
-def well_fields(token, well_id):
-    x = requests.get(f'https://api.iwell.info/v1/wells/{well_id}/fields', headers={'Authorization': f'Bearer {token}'})
-    data = x.json()['data']
-    for i in data:
-        print(f"{i}\n")
-
-def well_field_value(token,well_id,field_id,time_since):
-     x = requests.get(f'https://api.iwell.info/v1/wells/{well_id}/fields/{field_id}/values?since={time_since}', headers={'Authorization': f'Bearer {token}'})
-     field_value = []
-     data = x.json()['data']
-     for i in data:
-        field_value.append(i)
-     return field_value
-
-def well_comments(token, well_id,time_since):#lists from past to present
-    x = requests.get(f'https://api.iwell.info/v1/wells/{well_id}/notes?since={time_since}', headers={'Authorization': f'Bearer {token}'})
-    try:
-        data = x.json()['data']
-        comms = []
-        for i in data:
-            comms.append(i["message"])
-        return comms
-    except:
-        comms = [""]
-        return comms
 
 # Save pump parameters
 def pump_info():
