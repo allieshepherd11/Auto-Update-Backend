@@ -190,6 +190,15 @@ def economics(q_real, q_model, t_model, qi_est, b_est, Di_est, extr_mo, drop_ind
         return usd
     # print(BBLStoUSD(???))
 
+    def forecast(t, qi, b, Di):#forecast reserves from current time
+        limit = 140
+        qcurr = hyperbolicEq(t, qi, b, Di)
+        print("qcurr:", qcurr)
+        dcurr = Di/(1 + b*Di*t)
+        print("dcurr:", dcurr)
+        np = (qcurr**b)*(qcurr**(1-b) - limit**(1-b))/((1-b)*dcurr)
+        return np
+
     return q_sum, q_model_sum, future_prod, ecoLimit, modelEcoLimit
 
 main()
