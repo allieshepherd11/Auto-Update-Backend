@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from lxml import html
 import requests
 from collections import OrderedDict
-import json
 import time
 import os 
 import boto3
@@ -14,22 +13,13 @@ import time
 def main(field):#ET / ST
     dtype = {'Oil (BBLS)': float, 'Water (BBLS)': float, 'Gas (MCF)': float, 'TP': str, 'CP': str, 'Comments': str}
     df = pd.read_csv(f'db\\prod{field}\\update\\data{field}.csv', dtype=dtype)
-    #df = pd.read_json('data.json')
     df = df.fillna('')
     df.Date = pd.to_datetime(df.Date)
     df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
     start = df.iloc[0]['Date'].date() # Gets the most recent date from the dataframe
 
-    #Import recent data from email 
-    #dfImport = importDataEmail(start,dtype)
-
     #Import recent data from iwell
     dfImport,updates = importDataIwell(start,field=field)
-    #dfImport = pd.read_csv('ETimports.csv')
-    #updates = pd.read_csv('ETupdates.csv')
-    #updates = updates.to_dict(orient='records')
-    print(dfImport)
-    print(updates)
     # Update df 
     if updates:
         for i in updates:
@@ -40,26 +30,21 @@ def main(field):#ET / ST
         
 
     df = pd.concat([df,dfImport]).drop_duplicates()
-    print("\ndf:\n",df)
     df['Gas (MCF)'] = pd.to_numeric(df['Gas (MCF)'])
     df.reset_index(drop=True, inplace=True)
 
     # Fix blanks and clip negative values
-    df['Oil (BBLS)'].replace('',0, inplace=True)
+    # df['Oil (BBLS)'].replace('',0, inplace=True)
     df['Water (BBLS)'].replace('',0, inplace=True)
     df['Gas (MCF)'].replace('',0, inplace=True)
     df['Oil (BBLS)'] = df['Oil (BBLS)'].clip(lower=0).round()
     df['Water (BBLS)'] = df['Water (BBLS)'].clip(lower=0).round()
     df['Gas (MCF)'] = df['Gas (MCF)'].clip(lower=0).round()
     df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
-    
-    #Add total fluid column
-    #df['Total Fluid'] = df['Oil (BBLS)'] + df['Water (BBLS)']
 
     # Save to original data file
-    df.to_json(f'db\\prod{field}\\update\\data{field}.json')
+    # df.to_json(f'db\\prod{field}\\update\\data{field}.json')
     df.to_csv(f'db\\prod{field}\\update\\data{field}.csv', index=False)
-    
 
     # Get 30 day moving average and append column to df
     df = df.sort_values(['Date', 'Well Name'], ascending = [True , True])
@@ -76,26 +61,22 @@ def main(field):#ET / ST
     dfoil = df.groupby(['Well Name'])['Oil (BBLS)'].sum().divide(1000).astype(float).reset_index().round(1)
     dfwater = df.groupby(['Well Name'])['Water (BBLS)'].sum().divide(1000).astype(float).reset_index().round(1)
     dfgas = df.groupby(['Well Name'])['Gas (MCF)'].sum().divide(1000).astype(int).reset_index()
-    
-  
-    #df_formations = get_formations()
 
-    dfsum = dfoil.merge(dfwater, on='Well Name').merge(dfgas, on='Well Name')#.merge(df_formations, on='Well Name')
+    dfsum = dfoil.merge(dfwater, on='Well Name').merge(dfgas, on='Well Name')
     
     # Create entries for total field production in a way that can integrate with graph
     dfoiltotal = df.groupby(['Date'])['Oil (BBLS)'].sum().astype(int).reset_index()
     dfwatertotal = df.groupby(['Date'])['Water (BBLS)'].sum().astype(int).reset_index()
     dfgastotal = df.groupby(['Date'])['Gas (MCF)'].sum().astype(int).reset_index()
 
-    dfsummary = dfoiltotal.merge(dfwatertotal, on='Date').merge(dfgastotal, on='Date')
+    dfSTTotal = dfoiltotal.merge(dfwatertotal, on='Date').merge(dfgastotal, on='Date')
     
     title = 'South Texas Total'
     if field == "ET": title = "East Texas Total"
-    dfsummary['Well Name'] = title
+    dfSTTotal['Well Name'] = title
     
-    dfwebsite = pd.concat([df, dfsummary])
+    dfwebsite = pd.concat([df, dfSTTotal])
     dfwebsite = dfwebsite.sort_values(['Date', 'Well Name'], ascending = [False , True])
-    
     
     # CREATING A DF SPECIFIC TO JSON FORMAT (DATETIME)
     df_to_json_format = dfwebsite
@@ -111,8 +92,6 @@ def main(field):#ET / ST
     
     #add new total fluid col, needs to last col in df to mess up js for website, or add after gas col and change graph.js to point to new indexes 
     dfwebsite['Total Fluid'] = df['Oil (BBLS)'] + df['Water (BBLS)']
-    
-    
 
     # SAVING ALL PRODUCTION DATA TO WEBSITE FOLDER
     ##df_to_json_format.to_json("../STprodWebsite/STprod/static/allProductionData.json", orient='values', date_format='iso')
@@ -132,7 +111,6 @@ def main(field):#ET / ST
     #df_formations.to_json("db\\prodST\\formations.json", orient='values', date_format='iso')
     #df_info.to_json("pumpinfo.json", orient='values', date_format='iso')
 
-
     #pump_info()
     #get_formations()
 
@@ -151,7 +129,7 @@ def importDataIwell(start,field):
     if field == "ST": field = "SOUTH TEXAS"
     else: field = "EAST TEXAS"
 
-    unix_time_since = time.mktime(datetime.strptime(str(start), "%Y-%m-%d").timetuple()) #unix time since last import, most recent date is removed in line 52/53. max is 30 days ago
+    unix_time_since = time.mktime(datetime.strptime(str(start), "%Y-%m-%d").timetuple()) #unix time since last import, most recent date is removed in line 52/53. max is 30 days ago (iWell limit)
     if (datetime.today().date()-start).days > 30:
         print("too far in past")
         exit()
@@ -159,8 +137,7 @@ def importDataIwell(start,field):
     me(token)
     wellGroup = well_group(token)
     
-    st = single_well_group(token, wellGroup[field])#All ST wells
-    print(len(st))
+    st = single_well_group(token, wellGroup[field]) #All ST wells
     
     wells = list(st.keys())
     for well in wells:
@@ -281,7 +258,7 @@ def well_production(token, well_id,time_since,cnt=[]):#time_since = 0 gives last
     x = requests.get(f'https://api.iwell.info/v1/wells/{well_id}/production?&since={time_since}', headers={'Authorization': f'Bearer {token}'})
     prod_data = []
     try:
-        data = x.json()['data']   
+        data = x.json()['data']  
         for i in data:
             prod_data.append(i)
         return prod_data,cnt,x
@@ -314,12 +291,6 @@ def well_comments(token, well_id,time_since):#lists from past to present
         comms = [""]
         return comms
 
-# Save pump parameters
-def pump_info():
-    df_info = pd.read_excel('../CML/STprod.xlsx', sheet_name = 'Prod', usecols= 'A,I:R')
-    # df_info.to_csv('example.csv', index= False)
-    df_info.to_json("../STprodWebsite/STprod/static/pumpInfo.json", orient='records')
-
 def get_formations(field):
     df_formations = pd.read_excel(f'db\\prod{field}\\formations.xlsx')
     return df_formations
@@ -329,7 +300,10 @@ def addFormations(df):
     df.to_csv('db\\prodET\\dfsum.json')
     df_forms = pd.read_json('db\\prodET\\formations.json')
     return df.merge(df_forms,on=0)
+
 # Return and save list of wells that are performing poorly on the
+
+
 def analyze(df):
     df_analysis = df[
         (df['Date'] == df['Date'].max()) & (~df['Comments'].str.contains('off', case=False)) & (df['30DMA'] > 4) &
@@ -339,18 +313,8 @@ def analyze(df):
         )
     ]
     df_analysis['Date'] = df_analysis['Date'].dt.strftime('%B %d, %Y')
-    df_analysis.to_json("../STprodWebsite/STprod/static/analyze.json", orient='records')
-    
-def oil_revenue(price, bopd):
-    return round(price*.75*.954*bopd,2)
-
-def updateAwsSite(exportf, file_to_update):
-    s3 = boto3.client('s3')
-    with open(exportf, "rb") as f:
-        s3.upload_fileobj(f, "cmlproduction", file_to_update)#update s3 bucket
-    #cmd prompt to force cloudfront to check for updates
-    update = 'aws cloudfront create-invalidation --distribution-id E3D76XY0BGMLIM --paths /' + file_to_update
-    os.system(update)
+    df_analysis.to_json(
+        "../STprodWebsite/STprod/static/analyze.json", orient='records')
    
 # Execute program
 if __name__ == '__main__':
