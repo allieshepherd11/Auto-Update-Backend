@@ -22,6 +22,11 @@ def init():
         "password": password
     }
     r=requests.post('https://api.iwell.info/v1/oauth2/access-token', headers={"content-type":"application/json"}, json = body)
+    print(r)
+    print(f'status {r.status_code}')
+    print(f'status txt {r.text}')
+    print(f'status cont {r.content}')
+    print(r.json())
     return(r.json()['access_token'])
 
 def me(token):
@@ -110,5 +115,4 @@ def POST_tank_reading(token,tankID,payload):
     print(f'status {response.status_code}')
     print(f'status txt {response.text}')
     print(f'status cont {response.content}')
-
     return
