@@ -3,7 +3,9 @@
 # Make sure well names match website format
 import pandas as pd
 pd.options.display.float_format = '{:.10f}'.format
+drop_index = None
 
+    
 def main():
     # pd.options.display.float_format = '${:,.2f}'.format
 
