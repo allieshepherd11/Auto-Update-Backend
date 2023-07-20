@@ -22,11 +22,6 @@ def init():
         "password": password
     }
     r=requests.post('https://api.iwell.info/v1/oauth2/access-token', headers={"content-type":"application/json"}, json = body)
-    print(r)
-    print(f'status {r.status_code}')
-    print(f'status txt {r.text}')
-    print(f'status cont {r.content}')
-    print(r.json())
     return(r.json()['access_token'])
 
 def me(token):
@@ -81,15 +76,10 @@ def well_field_value(token,well_id,field_id,time_since):
 
 def well_comments(token, well_id,time_since):#lists from past to present
     x = requests.get(f'https://api.iwell.info/v1/wells/{well_id}/notes?since={time_since}', headers={'Authorization': f'Bearer {token}'})
-    try:
-        data = x.json()['data']
-        comms = []
-        for i in data:
-            comms.append(i["message"])
-        return comms
-    except:
-        comms = [""]
-        return comms
+    data = x.json()
+    print(f'comment data: {data}' )
+    if 'data' in data.keys(): return data['data']
+    return []
 
 def GET_tanks(token):
     x = requests.get('https://api.iwell.info/v1/tanks', headers={'Authorization': f'Bearer {token}'})
@@ -112,7 +102,4 @@ def POST_tank_reading(token,tankID,payload):
     payload = json.dumps(payload)
     response = requests.post(f'https://api.iwell.info/v1/tanks/{tankID}/readings',data=payload ,headers={'Authorization': f'Bearer {token}'})
     print(response)
-    print(f'status {response.status_code}')
-    print(f'status txt {response.text}')
-    print(f'status cont {response.content}')
     return
