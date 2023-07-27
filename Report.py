@@ -31,21 +31,27 @@ class ProdReport():
             if df[col].dtype == float:
                 df[col] = np.round(df[col]).astype('Int64')
         widths = self.workoutWidth(df)
-        return df.reset_index(drop=True),widths,today
+        df = df.reset_index(drop=True)
+
+        scols = [col for col in df.columns if 'Oil' in col or 'Gas' in col or 'Water' in col]
+        df = df._append(df[scols].sum(),ignore_index=True)
+        df.iloc[len(df)-1,df.columns.get_loc('Well Name')] = 'Total'
+
+        df[df.select_dtypes(include='Int64').columns] = df.select_dtypes(include='Int64').astype('float64')
+        df = df.replace(pd.NA,np.nan)
+        return pd.DataFrame(df.fillna(' ')),widths,today
     
     def workoutWidth(self, df):
         df = pd.DataFrame(df)
         pdf = FPDF()
         pdf.set_font("Arial", size=7)
 
-        print(df)
         widths = {}
         pos_end = pdf.l_margin
         for col in df.columns:
             widths[col] = {}
             longest = max(df[col].astype(str).tolist(),key=pdf.get_string_width)
     
-            print(f'{col} longest {longest}')
             title = col.split(' ')
             if len(title) == 2:
                 unit = '(MCF)' if title[1] == 'Gas' else '(BBLS)'
@@ -73,11 +79,12 @@ class ProdReport():
     
     def genReport(self):
         df,col_widths,today = self.prepdf(self.df)
-        print(df)
+        df[df.select_dtypes(include='float64').columns] = df.select_dtypes(include='float64').astype('Int64')
+        
         pdf = FPDF()
         pdf.set_font("Arial", size=10)
 
-        row_height = pdf.font_size * 1.5
+        row_height = pdf.font_size * 1.2
         page_width = pdf.w - 2 * pdf.l_margin
 
         comm_offset = 0
@@ -115,7 +122,7 @@ class ProdReport():
             if pdf.y + pdf.font_size * 1.5 > pdf.h - pdf.b_margin:
                 pdf.add_page()
                 header()
-            pdf.set_font("Arial", size=7)
+            pdf.set_font("Arial", size=6)
 
             for col in df.columns:
                 cell_value = str(row[col]).replace("’","")
@@ -152,8 +159,9 @@ class ProdReport():
 
         pdf.output(f'data/prod/{self.field}/report.pdf','F')    
 
-#if __name__ == '__main__':
-#    for FIELD,TITLE in {'ST':'South Texas','ET':'East Texas'}.items():
-#        reprt = ProdReport(field=FIELD,title=TITLE)
-#        reprt.genReport()
-#        webbrowser.open_new_tab(f"C:\\Users\\plaisancem\\Documents\\dev\\prod app\\backend\\data/prod/{FIELD}/report.pdf")
+if __name__ == '__main__':
+    for FIELD,TITLE in {'ST':'South Texas','ET':'East Texas','WT':'West Texas','GC':'Gulf Coast','WB':'Woodbine'}.items():
+        reprt = ProdReport(field=FIELD,title=TITLE)
+        reprt.genReport()
+        webbrowser.open_new_tab(f"C:\\Users\\plaisancem\\Documents\\dev\\prod app\\backend\\data/prod/{FIELD}/report.pdf")
+
