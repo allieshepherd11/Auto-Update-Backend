@@ -159,9 +159,9 @@ class ProdReport():
 
         pdf.output(f'data/prod/{self.field}/report.pdf','F')    
 
-if __name__ == '__main__':
-    for FIELD,TITLE in {'ST':'South Texas','ET':'East Texas','WT':'West Texas','GC':'Gulf Coast','WB':'Woodbine'}.items():
-        reprt = ProdReport(field=FIELD,title=TITLE)
-        reprt.genReport()
-        webbrowser.open_new_tab(f"C:\\Users\\plaisancem\\Documents\\dev\\prod app\\backend\\data/prod/{FIELD}/report.pdf")
+#if __name__ == '__main__':
+#    for FIELD,TITLE in {'ST':'South Texas','ET':'East Texas','WT':'West Texas','GC':'Gulf Coast','WB':'Woodbine'}.items():
+#        reprt = ProdReport(field=FIELD,title=TITLE)
+#        reprt.genReport()
+#        webbrowser.open_new_tab(f"C:\\Users\\plaisancem\\Documents\\dev\\prod app\\backend\\data/prod/{FIELD}/report.pdf")
 

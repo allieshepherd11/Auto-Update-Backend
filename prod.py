@@ -2,12 +2,12 @@ import pandas as pd
 from datetime import datetime
 import time
 import json
-import time
 from Report import ProdReport
 from Field import Field
+import webbrowser
 
-
-def main(field,abbr):
+def prod(field,abbr):
+    print(f'field {field}')
     dtype = {'Oil (BBLS)': float, 'Water (BBLS)': float, 'Gas (MCF)': float, 'TP': str, 'CP': str, 'Comments': str}
     df = pd.read_csv(f'data\\prod\\{abbr}\\data.csv', dtype=dtype)
     df = df.fillna('')
@@ -17,40 +17,42 @@ def main(field,abbr):
     ##Import recent data from iwell
     fld = Field(field,abbr,start)
     
-    dfImport,updates = fld.importData()
-    for i in updates:
-        mask = (df['Well Name'] == i["Well Name"]) & (df['Date'] == i["date"])
-        df.loc[mask, 'Oil (BBLS)'] = i["oil"]
-        df.loc[mask, 'Gas (MCF)'] = i["gas"]
-        df.loc[mask, 'Water (BBLS)'] = i["water"]
-        
+    #dfImport,updates = fld.importData()
+    ##for i in updates:
+    ##    mask = (df['Well Name'] == i["Well Name"]) & (df['Date'] == i["date"])
+    ##    df.loc[mask, ['Oil (BBLS)', 'Gas (MCF)', 'Water (BBLS)']] = i["oil"], i["gas"], i["water"]
+##
+ #   df = pd.concat([df,dfImport]).drop_duplicates()
 
-    df = pd.concat([df,dfImport]).drop_duplicates()
     df['Oil (BBLS)'] = pd.to_numeric(df['Oil (BBLS)'], errors='coerce')
     df['Gas (MCF)'] = pd.to_numeric(df['Gas (MCF)'])
     df.reset_index(drop=True, inplace=True)
-
-    # Fix blanks and clip negative values
-    # df['Oil (BBLS)'].replace('',0, inplace=True)
     df['Water (BBLS)'].replace('',0, inplace=True)
     df['Gas (MCF)'].replace('',0, inplace=True)
     df['Oil (BBLS)'] = df['Oil (BBLS)'].clip(lower=0).round()
     df['Water (BBLS)'] = df['Water (BBLS)'].clip(lower=0).round()
     df['Gas (MCF)'] = df['Gas (MCF)'].clip(lower=0).round()
-    df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
 
-    title = f'{fld.field} Total'
+    #fld specific tasks
+    if fld.abbr == 'GC': df = handleGC(df)
+    if fld.abbr == 'NM': df = handleNM(df)
+    if fld.abbr == 'ST': recYrProd(df,fld.abbr)
+    if fld.abbr == 'WT': df.loc[df['Well Name'] == 'Davis Lease','Well Name'] = 'Davis 3'
+
+    print(f'df {df}')
+    title = f'{fld.field} Total' if fld.field != 'West TX' else 'West Texas Total'
     df = df[df['Well Name'] != title]
-    # Save to original data file
-    df.to_csv(f'data\\prod\\{fld.abbr}\\data.csv', index=False)
-    # Get 30 day moving average and append column to df
+    df['Well Name'] = df['Well Name'].str.title()
+
     df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
-        
+    print(df)
+    df.to_csv(f'data\\prod\\{fld.abbr}\\data.csv', index=False)
+
+    df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
     dfoil = df.groupby(['Well Name'])['Oil (BBLS)'].sum().divide(1000).astype(float).reset_index().round(1)
     dfwater = df.groupby(['Well Name'])['Water (BBLS)'].sum().divide(1000).astype(float).reset_index().round(1)
     dfgas = df.groupby(['Well Name'])['Gas (MCF)'].sum().divide(1000).astype(int).reset_index()
     
-    #df_formations = get_formations()
 
     dfsum = dfoil.merge(dfwater, on='Well Name').merge(dfgas, on='Well Name')
     dfsum.loc[len(dfsum)] = dfsum[['Oil (BBLS)','Water (BBLS)','Gas (MCF)']].sum()
@@ -66,6 +68,7 @@ def main(field,abbr):
     
     df = pd.concat([df, dfTotal])
     df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
+    df['7DMA'] = df.groupby('Well Name')['Oil (BBLS)'].transform(lambda x: x.rolling(7, 1).mean().round(1))
     
     # ADD DATE COLUMN FOR X AXIS USE (DateYAxis) & CHANGING DATATYPE TO Object
     df['DateYAxis'] =  df['Date']
@@ -73,19 +76,18 @@ def main(field,abbr):
 
     #CHANGING DATE TO OBJECT TYPE AND SPELL OUT FORMAT
     df['Date'] =  pd.to_datetime(df['Date'])
-    #df['Date'] = df['Date'].dt.strftime('%Y-%m-%d')
     df['Date'] = df['Date'].dt.strftime('%B %d, %Y')
     
-    #add new total fluid col, needs to last col in df to mess up js for website, or add after gas col and change graph.js to point to new indexes 
     df['Total Fluid'] = df['Oil (BBLS)'] + df['Water (BBLS)']
 
-    if fld.abbr == "ET": df = df[["Well Name", "Date", "Oil (BBLS)","Gas (MCF)", "Water (BBLS)", "TP", "CP", "Comments","DateYAxis","Total Fluid"]]
+    df = df[["Well Name", "Date", "Oil (BBLS)","Gas (MCF)", "Water (BBLS)", "TP", "CP", "Comments","DateYAxis","Total Fluid","7DMA"]]
+
     
     df.to_json(f"data\\prod\\{fld.abbr}\\data.json", orient='values', date_format='iso') #updating loc json file
     dfsum.to_json(f"data\\prod\\{fld.abbr}\\cuml.json", orient='values', date_format='iso')
-    #write_formations()
 
     if fld.abbr == "ST": update_pumpInfo(); analyze(pd.read_csv(f'data\\prod\\{fld.abbr}\\data.csv'),'ST')
+
     return
 
 def write_formations():
@@ -144,9 +146,9 @@ def analyze(df,field):
     df_analysis.to_json('data\\prod\\ST\\analyze.json',orient='records')
 
 def move(field):
-    paths = {f'data\\prod\\{field}\\cuml.json': f'../frontend/data/cumlProd{field}.json',
-             f'data\\prod\\{field}\\data.json': f'../frontend/data/allProductionData{field}.json',
-             f'data\\prod\\{field}\\analyze.json': f'../frontend/data/analyze{field}.json',
+    paths = {f'data\\prod\\{field}\\cuml.json': f'../frontend/data/{field}/cumlProd{field}.json',
+             f'data\\prod\\{field}\\data.json': f'../frontend/data/{field}/prod{field}.json',
+             f'data\\prod\\{field}\\analyze.json': f'../frontend/data/{field}/analyze{field}.json',
              }
     try:
         for k,v in paths.items(): pd.read_json(k).to_json(v,orient='values',date_format='iso')
@@ -190,10 +192,76 @@ def moProd(field):
     df_final.to_csv(f"data\prod\{field}\moData.csv", index=False) 
     df_final.to_json(f"../frontend/data/dataMonthly{field}.json", orient='values', date_format='iso')
 
+def recYrProd(df:pd.DataFrame,field):
+    df = df.copy()
+    data = {"Date": [], "New Prod": [] , "Tot Prod": [], 'percent' : []}
+    _365 = 60*60*24*365
+
+    df['Date'] = pd.to_datetime(df['Date'])
+
+    first_prod = df.groupby('Well Name')['Date'].min()
+    first_prod = first_prod.apply(lambda x: int(x.timestamp()))
+    first_prod = first_prod.to_dict()
+    dates = sorted(list(set(df["Date"].tolist())))
+
+    for date in dates:
+        prod_today = 0
+        totprod_today = 0
+        data["Date"].append(date)
+
+        unix = int(date.timestamp())
+        mask = (df["Date"] == date) 
+        df_date = df[mask]
+
+        for _,row in df_date.iterrows():
+            totprod_today += row["Oil (BBLS)"]
+            day1 = first_prod[row["Well Name"]]
+            if day1 > (unix - _365):
+                prod_today += row["Oil (BBLS)"]
+        data["New Prod"].append(prod_today)
+        data["Tot Prod"].append(totprod_today)
+        if totprod_today != 0: percent = 100*(prod_today/totprod_today)
+        else : percent = 0
+        data["percent"].append(round(percent))
+
+
+    pd.DataFrame(data).to_csv(f'data/prod/{field}/recYrProd.csv',index=False)
+    pd.DataFrame(data).to_csv( f'../frontend/data/{field}/recYrProd.csv',index=False)
+
+def handleGC(df:pd.DataFrame) -> pd.DataFrame:
+    df.loc[df['Well Name'] == 'JM MOORE','Well Name'] = 'JM Moore'
+    mask = (df['Well Name'].str.contains("JM Moore"))
+    jms = ['JM Moore 178','JM Moore 192','JM Moore Main Battery','JM Moore Test Battery']
+
+    ds = set(df['Date'].tolist()); ds = list(ds)
+    for d in ds:
+        mask = ((df['Well Name'].isin(jms)) & (df['Date'] == d))
+        if not mask.any(): continue
+        jmdf = df[mask]
+        sums = jmdf[['Oil (BBLS)', 'Gas (MCF)','Water (BBLS)']].sum()
+        tp = jmdf.loc[jmdf['Well Name'] == 'JM Moore 192', 'TP'].tolist()[0]
+        cp = jmdf.loc[jmdf['Well Name'] == 'JM Moore 192', 'CP'].tolist()[0]
+        c192 = jmdf.loc[jmdf['Well Name'] == 'JM Moore 192', 'Comments'].tolist()[0]; c178 = jmdf.loc[jmdf['Well Name'] == 'JM Moore 178', 'Comments'].tolist()[0]
+        comm192 = c192 if c192 != 'nan' else ''
+        comm178 = c178 if c178 != 'nan' else ''
+        entry = {'Well Name':'JM Moore','Date':d,'Oil (BBLS)':sums['Oil (BBLS)'],'Gas (MCF)':sums['Gas (MCF)'],
+                    'Water (BBLS)':sums['Water (BBLS)'],'TP':tp,'CP':cp,'Comments':f'192: {comm192} 178: {comm178}'}
+        entry = {k:[v] for k,v in entry.items()}
+        df = pd.concat([df,pd.DataFrame(entry)])
+
+    df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
+    rm = ['Dyer 2 Sales Tap','Jm Moore 92 Swd','Moore Cl 10 Swd']
+    for i in jms: rm.append(i)
+    mask = ~df['Well Name'].isin(rm)
+
+    return df[mask]
+
+def handleNM(df:pd.DataFrame) -> pd.DataFrame:
+    rm = ["Cooper 24 Federal #2 SWD","Nathaniel 29 St #1","CW 14 State #1","Mcwf #1"]
+    return df[~df['Well Name'].isin(rm)]
+
 if __name__ == '__main__':
-    #for ABBR,FIELD in {'ST':'SOUTH TEXAS','ET':'EAST TEXAS'}.items(): main(field=FIELD,abbr=ABBR); move(field=ABBR);time.sleep(60)
-    #for ABBR,FIELD in {'GC':'Gulf Coast','WT':'West TX'}.items(): main(field=FIELD,abbr=ABBR); move(field=ABBR);time.sleep(60)
-    main('New Mexico','NM'); move('NM')
-    
-
-
+    for ABBR,FIELD in {'ST':'SOUTH TEXAS','ET':'EAST TEXAS','GC':'Gulf Coast','WT':'West TX','NM':'New Mexico'}.items(): 
+        prod(field=FIELD,abbr=ABBR); move(field=ABBR)
+        ProdReport(field=ABBR,title=FIELD).genReport()
+        webbrowser.open_new_tab(f"C:\\Users\\plaisancem\\Documents\\dev\\prod app\\backend\\data/prod/{ABBR}/report.pdf")

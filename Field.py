@@ -9,65 +9,17 @@ import json
 import pandas as pd
 
 
-def nw():
-    field = 'New Mexico'
-    TOKEN = iWell.init()
-    iWell.me(TOKEN)
-    wellGroups = iWell.well_group(TOKEN)
-    
-    nw = iWell.single_well_group(TOKEN,wellGroups[field])
-    since = 1689638400#7/18
-    start = since
-
-    updates = []
-    importData = []
-    print(sorted(nw))
-    bats = ['Abenaki 10 State #2 & #3',
-    'Beams 15 State #2 & 4',    
-    'Henry 24 #1',
-    'Paddy 15 State #1', 
-    'Paddy 18 State #1 & #3',
-    'Paddy 19 State #1 #4 #5',
-    'Paddy 19 State #2 & #3',
-    'Raider 9 St. #1, #3']
-    for well in sorted(bats):
-        test = iWell.GETwellTests(TOKEN,nw[well])
-        print(f'{well} , id: {nw[well]}')
-    exit()    
-
-    #missing 
-
-    #shared batteries
-
-    #Abenaki 10 State #2 & #3
-    #Beams 15 State #2 & 4    called Beams 15 State # on iwell
-    #Henry 24 #1
-    #Paddy 15 #1             gives 1,2,3
-    #Paddy 18 State #1 & #3
-    #Paddy 19 State #1 #4 #5
-    #Paddy 19 State #2 & #3
-    #Raider 9 St. #1, #3     test # says 2 and 3 but seems to be for 1 and 3
-    ['Abenaki 10 State #2 & #3',
-    'Beams 15 State #2 & 4',    
-    'Henry 24 #1',
-    'Paddy 15 #1            ', 
-    'Paddy 18 State #1 & #3',
-    'Paddy 19 State #1 #4 #5',
-    'Paddy 19 State #2 & #3',
-    'Raider 9 St. #1, #3 ']
-
-
 class Field():
     def __init__(self, field,abbr,start) -> None:
         self.field = field
         self.abbr = abbr
         self.start = start
+        self.calls = 0
         self.since = datetime.strptime(str(start), "%Y-%m-%d").timestamp()
         self.imprtDays = self.dStrs(start,str(datetime.today().date()))
         self.token = self.access()
         w = self.GET_field(self.GET_wellGroups()[self.field]) 
         self.wells = {well:w[well] for well in sorted(w) }
-        self.calls = 3
         
     def __repr__(self):
         return '\n'.join([
@@ -82,13 +34,13 @@ class Field():
         for well,id in self.wells.items():
             if 'Compressor' in well or 'Drip' in well: continue
             try:
-                self.handleCall()
-                prod = self.GET_wellProduction(id,since); self.handleCall()
-                comms = self.GET_wellComments(id,since); self.handleCall()
-                tp = self.GET_wellFieldValue(id,607,since); self.handleCall()
+                prod = self.GET_wellProduction(id,since)
+                comms = self.GET_wellComments(id,since)
+                tp = self.GET_wellFieldValue(id,607,since)
                 cp = self.GET_wellFieldValue(id,1415,since)
                 print(well)
             except Exception as e: print(e,"no data for",well); continue
+            print(f'calls after well {self.calls}')
 
             for i in prod[:]:
                 if i["production_time"] != i["updated_at"] and i["production_time"] < since and i["date"] != str(datetime.today().date()):#gets updated prod, but not today or updates since last import
@@ -154,7 +106,7 @@ class Field():
         print(f'id {id}')
         well_name = alct[id]['name']
                 
-        tnum = self.GET_wellFieldValue(id,'805',self.since); self.handleCall()
+        tnum = self.GET_wellFieldValue(id,'805',self.since)
         testprod = [self.GET_wellFieldValue(id,key,self.since)  for key in [806,855,807]]#oil,gas,water
         
         twell = {k:None for k in self.imprtDays}
@@ -259,7 +211,7 @@ class Field():
             "username": os.getenv('email'),
             "password": os.getenv('password')
         }
-        r=requests.post('https://api.iwell.info/v1/oauth2/access-token', headers={"content-type":"application/json"}, json = body)
+        r=requests.post('https://api.iwell.info/v1/oauth2/access-token', headers={"content-type":"application/json"}, json = body); self.handleCall()
         return(r.json()['access_token'])
 
     def me(self):
@@ -268,7 +220,7 @@ class Field():
 
     def GET_wellGroups(self):
         group_dict = {}
-        x = requests.get('https://api.iwell.info/v1/well-groups', headers={'Authorization': f'Bearer {self.token}'})
+        x = requests.get('https://api.iwell.info/v1/well-groups', headers={'Authorization': f'Bearer {self.token}'}); self.handleCall()
         data = x.json()['data']
         [group_dict.update({i['name']: i['id']}) for i in data]
         #print("well group:",group_dict)
@@ -276,13 +228,14 @@ class Field():
 
     def GET_field(self, fieldID):
         well_dict = {}
-        x = requests.get(f'https://api.iwell.info/v1/well-groups/{fieldID}/wells', headers={'Authorization': f'Bearer {self.token}'})
+        x = requests.get(f'https://api.iwell.info/v1/well-groups/{fieldID}/wells', headers={'Authorization': f'Bearer {self.token}'}); self.handleCall()
         data = x.json()['data']   
         [well_dict.update({i['name']: i['id']}) for i in data] 
         return(well_dict)
 
     def GET_wellProduction(self, well_id,time_since):
         x = requests.get(f'https://api.iwell.info/v1/wells/{well_id}/production?&since={time_since}', headers={'Authorization': f'Bearer {self.token}'})
+        self.handleCall()
         prod_data = []
         try:
             data = x.json()['data']   
@@ -293,14 +246,14 @@ class Field():
             return prod_data
 
     def GET_wellFields(self, well_id):
-        x = requests.get(f'https://api.iwell.info/v1/wells/{well_id}/fields', headers={'Authorization': f'Bearer {self.token}'})
+        x = requests.get(f'https://api.iwell.info/v1/wells/{well_id}/fields', headers={'Authorization': f'Bearer {self.token}'}); self.handleCall()
         data = x.json()['data']
         for i in data:
             print(f"{i}\n")
 
     def GET_wellFieldValue(self,well_id,field_id,time_since):
-        self.handleCall()
         x = requests.get(f'https://api.iwell.info/v1/wells/{well_id}/fields/{field_id}/values?since={time_since}', headers={'Authorization': f'Bearer {self.token}'})
+        self.handleCall()
         field_value = []
         data = x.json()['data']
         for i in data:
@@ -309,12 +262,13 @@ class Field():
 
     def GET_wellComments(self, well_id,time_since):#lists from past to present
         x = requests.get(f'https://api.iwell.info/v1/wells/{well_id}/notes?since={time_since}', headers={'Authorization': f'Bearer {self.token}'})
+        self.handleCall()
         data = x.json()
         if 'data' in data.keys(): return data['data']
         return []
 
     def GET_tanks(self):
-        x = requests.get('https://api.iwell.info/v1/tanks', headers={'Authorization': f'Bearer {self.token}'})
+        x = requests.get('https://api.iwell.info/v1/tanks', headers={'Authorization': f'Bearer {self.token}'}); self.handleCall()
         data = x.json()['data']
         print(f' data {data}')
         df = pd.DataFrame(data)
@@ -322,11 +276,13 @@ class Field():
 
     def GET_tankReading(self,id,since=''):
         x = requests.get(f'https://api.iwell.info/v1/tanks/{id}/readings?since={since}', headers={'Authorization': f'Bearer {self.token}'})
+        self.handleCall()
         data = x.json()['data']
         return data
 
     def GET_runTicket(self,tankID,readingID):
         x = requests.get(f'https://api.iwell.info/v1/tanks/{tankID}/readings/{readingID}/run-tickets', headers={'Authorization': f'Bearer {self.token}'})
+        self.handleCall()
         data = x.json()['data']
         return data
 
@@ -337,7 +293,7 @@ class Field():
         return
 
     def GET_wellTests(self,wellID):
-        x = requests.get(f'https://api.iwell.info/v1/wells/{wellID}/well-tests', headers={'Authorization': f'Bearer {self.token}'})
+        x = requests.get(f'https://api.iwell.info/v1/wells/{wellID}/well-tests', headers={'Authorization': f'Bearer {self.token}'}); self.handleCall()
         data = x.json()
         print(data)
         return data
@@ -360,10 +316,11 @@ class Field():
         self.calls += 1
         if self.calls >= 23: self.calls = 0; print('sleep'); time.sleep(60)
 
+
 #if __name__ == '__main__':
 #    #df = pd.read_csv('data\prod\GC\data.csv')11441
-#    start = '2023-07-16'
-#    fld = Field('New Mexico','NM',start)
+#    start = '2023-07-29'
+#    fld = Field('SOUTH TEXAS','TX',start)
 #    print(fld)
 #    print(fld.wells)
 #    dfimport,updates = fld.importData()
