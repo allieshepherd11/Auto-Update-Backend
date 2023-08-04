@@ -2,8 +2,8 @@ import pandas as pd
 from datetime import datetime
 import time
 import json
-from Report import ProdReport
-from Field import Field
+from report import ProdReport
+from field import Field
 import webbrowser
 
 def prod(field,abbr):
@@ -17,12 +17,11 @@ def prod(field,abbr):
     ##Import recent data from iwell
     fld = Field(field,abbr,start)
     
-    #dfImport,updates = fld.importData()
-    ##for i in updates:
-    ##    mask = (df['Well Name'] == i["Well Name"]) & (df['Date'] == i["date"])
-    ##    df.loc[mask, ['Oil (BBLS)', 'Gas (MCF)', 'Water (BBLS)']] = i["oil"], i["gas"], i["water"]
-##
- #   df = pd.concat([df,dfImport]).drop_duplicates()
+    dfImport,updates = fld.importData()
+    for i in updates:
+        mask = (df['Well Name'] == i["Well Name"]) & (df['Date'] == i["date"])
+        df.loc[mask, ['Oil (BBLS)', 'Gas (MCF)', 'Water (BBLS)']] = i["oil"], i["gas"], i["water"]
+    df = pd.concat([df,dfImport]).drop_duplicates()
 
     df['Oil (BBLS)'] = pd.to_numeric(df['Oil (BBLS)'], errors='coerce')
     df['Gas (MCF)'] = pd.to_numeric(df['Gas (MCF)'])
@@ -43,7 +42,17 @@ def prod(field,abbr):
     title = f'{fld.field} Total' if fld.field != 'West TX' else 'West Texas Total'
     df = df[df['Well Name'] != title]
     df['Well Name'] = df['Well Name'].str.title()
-
+    wnMap = {'Cr #101': 'CR #101','Cr #201': 'CR #201','Cr #301': 'CR #301',
+             'Cr #302': 'CR #302','Cr #401': 'CR #401','Cr #501': 'CR #501',
+             'Cr #939': 'CR #939','Jj #1': 'JJ #1','Ct #1': 'CT #1','Jic #1': 'JIC #1',
+             'Jic Buda #1': 'JIC Buda #1','Lt #1': 'LT #1','Mdb #1': 'MDB #1','Pc #1': 'PC #1',
+             'Rab #1': 'RAB #1','Rab #2': 'RAB #2','Rab #3': 'RAB #3','Bmmp #1': 'BMMP #1',
+             'Bruce Weaver #2 Re': 'Bruce Weaver #2 RE','Vre Minerals #1':'VRE Minerals #1',
+             'Dial #1 St': 'Dial #1 ST'}
+    
+    for k,v in wnMap.items(): df.loc[df['Well Name'] == k,'Well Name'] = v
+    m = df['Well Name'] == 'Lamb #1'
+    df = df[~m]
     df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
     print(df)
     df.to_csv(f'data\\prod\\{fld.abbr}\\data.csv', index=False)
@@ -126,11 +135,10 @@ def analyze(df,field):
     mask = ((df['Date'] == datetime_2ndRec) | (df['Date'] == rec_date))
     df_2nd = df[mask]
     res = []
-    for idx,well in enumerate(schedule[:]):
+    for _,well in enumerate(schedule[:]):
         temp = df_2nd[df_2nd['Well Name'] == well]
         mask = temp['Oil (BBLS)'] == 0
         if  mask.all(): 
-            print(mask)
             res.append(well)
     
     schedule = [item for item in schedule if item not in res]
@@ -164,9 +172,9 @@ def moProd(field):
     df_daily['Month'] = df_daily['Date'].dt.month
     df_daily['Year'] = df_daily['Date'].dt.year
     grouped = df_daily.groupby(['Well Name', 'Year', 'Month'])
-
+    print(df_daily)
     # sum up production from each month
-    monthly_sum = grouped.sum().reset_index()
+    monthly_sum = grouped.sum(['Oil (BBLS)', 'Gas (MCF)', 'Water (BBLS)']).reset_index()
     monthly_sum['Date'] = pd.to_datetime(monthly_sum[['Year', 'Month']].assign(day=1))
     monthly_sum = monthly_sum.drop('Year', axis=1)
     monthly_sum = monthly_sum.drop('Month', axis=1)
@@ -179,7 +187,7 @@ def moProd(field):
     grouped = df_day.groupby(['Year', 'Month'])
 
     # sum up production from each month field
-    mo_sum = grouped.sum().reset_index()
+    mo_sum = grouped.sum(['Oil (BBLS)', 'Gas (MCF)', 'Water (BBLS)']).reset_index()
     mo_sum['Date'] = pd.to_datetime(mo_sum[['Year', 'Month']].assign(day=1))
     mo_sum = mo_sum.drop('Year', axis=1)
     mo_sum = mo_sum.drop('Month', axis=1)
@@ -190,7 +198,7 @@ def moProd(field):
     df_final = df_final.sort_values('Date').reset_index(drop=True)
 
     df_final.to_csv(f"data\prod\{field}\moData.csv", index=False) 
-    df_final.to_json(f"../frontend/data/dataMonthly{field}.json", orient='values', date_format='iso')
+    df_final.to_json(f"../frontend/data/{field}/dataMonthly{field}.json", orient='values', date_format='iso')
 
 def recYrProd(df:pd.DataFrame,field):
     df = df.copy()
@@ -260,8 +268,22 @@ def handleNM(df:pd.DataFrame) -> pd.DataFrame:
     rm = ["Cooper 24 Federal #2 SWD","Nathaniel 29 St #1","CW 14 State #1","Mcwf #1"]
     return df[~df['Well Name'].isin(rm)]
 
+def lstProd(field):
+    df = pd.read_csv(f'data\prod\{field}\data.csv')
+    wells = sorted(set(df['Well Name'].tolist()))
+
+    res = {'Well Name':[],'Last Production': []}
+    for well in wells:
+        mask = (df['Well Name'] == well) & (df['Oil (BBLS)'] + df['Gas (MCF)'] != 0)
+        dfwell = df[mask].reset_index(drop=True).sort_values(['Date'], ascending = [False])
+        res['Well Name'].append(well);res['Last Production'].append(dfwell.iloc[0]['Date'] if mask.any() else None) 
+
+    pd.DataFrame(res).to_csv(f'data\prod\{field}\lstProd.csv',index=False)
+
 if __name__ == '__main__':
-    for ABBR,FIELD in {'ST':'SOUTH TEXAS','ET':'EAST TEXAS','GC':'Gulf Coast','WT':'West TX','NM':'New Mexico'}.items(): 
-        prod(field=FIELD,abbr=ABBR); move(field=ABBR)
-        ProdReport(field=ABBR,title=FIELD).genReport()
-        webbrowser.open_new_tab(f"C:\\Users\\plaisancem\\Documents\\dev\\prod app\\backend\\data/prod/{ABBR}/report.pdf")
+    for abbr,field in {'ST':'SOUTH TEXAS','ET':'EAST TEXAS','GC':'Gulf Coast','WT':'West TX','NM':'New Mexico'}.items(): 
+        if abbr != 'NM':continue
+        prod(field=field,abbr=abbr); move(field=abbr)
+        lstProd(abbr)
+        ProdReport(field=abbr,title=field).genReport()
+        webbrowser.open_new_tab(f'C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\backend\\data\\prod\\{abbr}\\report.pdf')

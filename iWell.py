@@ -66,7 +66,7 @@ def well_fields(token, well_id):
     for i in data:
         print(f"{i}\n")
 
-def well_field_value(token,well_id,field_id,time_since):
+def GET_wellFieldValue(token,well_id,field_id,time_since):
      x = requests.get(f'https://api.iwell.info/v1/wells/{well_id}/fields/{field_id}/values?since={time_since}', headers={'Authorization': f'Bearer {token}'})
      field_value = []
      data = x.json()['data']

@@ -2,28 +2,37 @@ import pandas as pd
 import numpy as np
 from fpdf import FPDF
 import webbrowser
+import datetime
 
 class ProdReport():
-    def __init__(self, field,title):
+    def __init__(self, field,title,day=None):
         self.field = field
         self.title = title
         self.dtype = {'Oil (BBLS)': float, 'Water (BBLS)': float, 'Gas (MCF)': float, 'TP': float, 'CP': float, 'Comments': str}
         self.df = pd.read_csv(f'data\\prod\\{self.field}\\data.csv', dtype=self.dtype)
+        self.day = day if day is not None else self.df['Date'][0]
+        self.dateTitle = datetime.datetime.strptime(self.day, "%Y-%m-%d").strftime("%b %d")
+        self.dayFormat = datetime.datetime.strptime(self.day, "%Y-%m-%d").strftime("%m-%d-%Y")
+        if field == 'WT' or field == 'NM':self.df = self.df.drop(['CP'], axis=1)
+        print(f'self.day {self.day}')
+
     
-    def prepdf(self, df):
+    def prepdf(self, df:pd.DataFrame):
         df = df[df['Well Name'] != 'South Texas Total']
-        today = df['Date'][0]
-        mon = today[:-3]
+        mon = self.day[:-3]
         df['Date'] = pd.to_datetime(df['Date'])
         df_mon = pd.DataFrame(df[df['Date'].dt.strftime('%Y-%m') == mon])
-        df_mon = df_mon.drop(['Date','TP','CP','Comments'],axis=1)
+        ds = [col for col in df.columns if col in ['Date','TP','CP','Comments']]
+        df_mon = df_mon.drop(ds,axis=1)
         df_monCuml = df_mon.groupby('Well Name').sum()
         df_monCuml = df_monCuml.rename({'Oil (BBLS)': 'MTD Oil','Gas (MCF)': 'MTD Gas','Water (BBLS)': 'MTD Water' },axis=1)
 
         df = pd.merge(df,df_monCuml,on='Well Name')
-        
-        df = df.reindex(columns=['Well Name','Date','Oil (BBLS)','Gas (MCF)','Water (BBLS)', 'MTD Oil', 'MTD Gas', 'MTD Water','TP','CP','Comments'])
-        df = df[df['Date'] == today]
+        if self.field == 'WT' or self.field == 'NM': col_ord = ['Well Name','Date','Oil (BBLS)','Gas (MCF)','Water (BBLS)', 'MTD Oil', 'MTD Gas', 'MTD Water','TP','Comments']
+        else: col_ord = ['Well Name','Date','Oil (BBLS)','Gas (MCF)','Water (BBLS)', 'MTD Oil', 'MTD Gas', 'MTD Water','TP','CP','Comments']
+        df = df.reindex(columns=col_ord)
+
+        df = df[df['Date'] == self.day]
         df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
         df = df.drop(['Date'],axis=1).fillna('')
         
@@ -39,13 +48,12 @@ class ProdReport():
 
         df[df.select_dtypes(include='Int64').columns] = df.select_dtypes(include='Int64').astype('float64')
         df = df.replace(pd.NA,np.nan)
-        return pd.DataFrame(df.fillna(' ')),widths,today
+        return pd.DataFrame(df.fillna(' ')),widths
     
-    def workoutWidth(self, df):
-        df = pd.DataFrame(df)
+    def workoutWidth(self, df:pd.DataFrame):
         pdf = FPDF()
         pdf.set_font("Arial", size=7)
-
+        print(f'df {df}')
         widths = {}
         pos_end = pdf.l_margin
         for col in df.columns:
@@ -77,10 +85,9 @@ class ProdReport():
                 widths[poor]['pos_end'] += gift*(idx + 1)
         return widths
     
-    def genReport(self):
-        df,col_widths,today = self.prepdf(self.df)
+    def genReport(self):        
+        df,col_widths = self.prepdf(self.df)
         df[df.select_dtypes(include='float64').columns] = df.select_dtypes(include='float64').astype('Int64')
-        
         pdf = FPDF()
         pdf.set_font("Arial", size=10)
 
@@ -93,7 +100,7 @@ class ProdReport():
             pdf.cell(0, 10, txt=self.title, ln=True, align="C")
             pdf.cell(0, 10, txt="Daily Gross Production Report", border='B', ln=True, align="C")
             pdf.set_font("Arial", size=10)
-            pdf.cell(0, 8, txt=today, ln=True, align="R")
+            pdf.cell(0, 8, txt=self.dayFormat, ln=True, align="R")
 
             pdf.set_x(col_widths['MTD Oil']['pos_end'])
             pdf.set_font("Arial", size=7)
@@ -113,7 +120,6 @@ class ProdReport():
             comm_offset = col_widths['Comments']['pos_end'] - col_widths['Comments']['width']
 
         
-
         pdf.add_page()
         header()
         mb = pdf.b_margin
@@ -129,9 +135,11 @@ class ProdReport():
                 cell_width = col_widths[col]['width']
                 
                 if col == 'Comments':
-                    cell_width = page_width - col_widths['CP']['pos_end'] + pdf.l_margin
+                    k = 'TP' if self.field == 'NM' or self.field =='WT' else 'CP'
+                    cell_width = page_width - col_widths[k]['pos_end'] + pdf.l_margin
                     comm_width = pdf.get_string_width(cell_value)
                     words = cell_value.split(' ')
+
                     if comm_width + 2 > cell_width: 
                         w = words[:]
                         cnt = 0
@@ -156,12 +164,13 @@ class ProdReport():
 
                 pdf.cell(cell_width, row_height, txt=cell_value, border=1, ln=False, align='L')
             pdf.ln(row_height)
+        print(f'self.day {self.dateTitle}')
+        pdf.output(f'data/prod/{self.field}/{self.dateTitle}-{self.title}.pdf','F')    
+        pdf.output(f'data/prod/{self.field}/report.pdf','F')
 
-        pdf.output(f'data/prod/{self.field}/report.pdf','F')    
-
-#if __name__ == '__main__':
-#    for FIELD,TITLE in {'ST':'South Texas','ET':'East Texas','WT':'West Texas','GC':'Gulf Coast','WB':'Woodbine'}.items():
-#        reprt = ProdReport(field=FIELD,title=TITLE)
-#        reprt.genReport()
-#        webbrowser.open_new_tab(f"C:\\Users\\plaisancem\\Documents\\dev\\prod app\\backend\\data/prod/{FIELD}/report.pdf")
+if __name__ == '__main__':
+    for FIELD,TITLE in {'ST':'South Texas','ET':'East Texas','WT':'West Texas','GC':'Gulf Coast','NM':'New Mexico'}.items():
+        reprt = ProdReport(field=FIELD,title=TITLE)
+        reprt.genReport()
+        webbrowser.open_new_tab(f"C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\backend\\data\\prod\\{FIELD}\\report.pdf")
 

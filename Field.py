@@ -8,17 +8,17 @@ import time
 import json
 import pandas as pd
 
-
 class Field():
-    def __init__(self, field,abbr,start) -> None:
+    def __init__(self,field,abbr,start) -> None:
         self.field = field
         self.abbr = abbr
         self.start = start
-        self.calls = 0
+        self.calls = 1
         self.since = datetime.strptime(str(start), "%Y-%m-%d").timestamp()
         self.imprtDays = self.dStrs(start,str(datetime.today().date()))
+
         self.token = self.access()
-        w = self.GET_field(self.GET_wellGroups()[self.field]) 
+        w = self.GET_field(self.GET_wellGroups()[field]) 
         self.wells = {well:w[well] for well in sorted(w) }
         
     def __repr__(self):
@@ -32,15 +32,19 @@ class Field():
         updates = []
         importData = []
         for well,id in self.wells.items():
-            if 'Compressor' in well or 'Drip' in well: continue
+            if 'Compressor' in well or 'Drip' in well or 'SWD' in well: continue
             try:
                 prod = self.GET_wellProduction(id,since)
                 comms = self.GET_wellComments(id,since)
                 tp = self.GET_wellFieldValue(id,607,since)
                 cp = self.GET_wellFieldValue(id,1415,since)
                 print(well)
-            except Exception as e: print(e,"no data for",well); continue
-            print(f'calls after well {self.calls}')
+            except requests.exceptions.ConnectionError as e: 
+                print(f"API Limit on {well}");time.sleep(61)
+                prod = self.GET_wellProduction(id,since)
+                comms = self.GET_wellComments(id,since)
+                tp = self.GET_wellFieldValue(id,607,since)
+                cp = self.GET_wellFieldValue(id,1415,since)
 
             for i in prod[:]:
                 if i["production_time"] != i["updated_at"] and i["production_time"] < since and i["date"] != str(datetime.today().date()):#gets updated prod, but not today or updates since last import
@@ -57,7 +61,8 @@ class Field():
             except FileNotFoundError: alct = {'no':0}
 
             if (id in alct.keys()): 
-                for entry in self.allocation(id,prod,comms,alct,alct_path): importData.append(entry)
+                sharedBatt = Allocations(self.token,id,prod,comms,alct,since,self.imprtDays).allocate()
+                for entry in sharedBatt: importData.append(entry)
                 continue
 
             #get list of production time for cp and tp
@@ -102,106 +107,7 @@ class Field():
 
         return dfimport,updates
     
-    def allocation(self,id,prod,comms,alct,alct_path) -> list:#makes 4 api calls
-        print(f'id {id}')
-        well_name = alct[id]['name']
-                
-        tnum = self.GET_wellFieldValue(id,'805',self.since)
-        testprod = [self.GET_wellFieldValue(id,key,self.since)  for key in [806,855,807]]#oil,gas,water
-        
-        twell = {k:None for k in self.imprtDays}
-        
-        for test in tnum: twell[datetime.fromtimestamp(test['reading_time']).strftime('%Y-%m-%d')] = int(test['value'])
-        tprod = {k:{} for k in self.imprtDays}
-        for comm in comms:
-            dstr = datetime.fromtimestamp(comm['note_time']).strftime('%Y-%m-%d')
-            if dstr in tprod.keys(): tprod[dstr]['comm'] = comm['message']
-
-        for i in range(len(testprod)):
-            for rd in testprod[i]:
-                dstr = datetime.fromtimestamp(rd['reading_time']).strftime('%Y-%m-%d')
-                if dstr in self.imprtDays: tprod[dstr][['oil','gas','water'][i]] = float(rd['value'])
-        
-        for day,prd in tprod.items():
-            misses = [i for i in ['oil','gas','water'] if i not in prd.keys()]
-            for miss in misses: tprod[day][miss] = 0#tests[id][float(twell[day])][miss]
-        
-        typs = ['oil','gas','water']
-        res = []
-        for day in prod:
-            date = day['date']
-            comm = tprod[date]['comm'] if 'comm' in tprod[date].keys() else ""
-
-            shtIn = alct[id]['shutIn'][date] if date in alct[id]['shutIn'].keys() else []
-            cb = alct[id]['wells'][:]
-            if twell[date] in cb: cb.remove(twell[date])
-
-            if twell[date] is None or twell[date] not in alct[id]['wells']:#no test well
-                if len(shtIn) == 1 and len(cb) == 2:
-                    wn1 = cb.pop(); wn2 = cb.pop()
-                    wellNum = wn2 if int(wn1) in shtIn else wn1
-                    res.append([f'{well_name} #{wellNum}',date,day['oil'],day['gas'],day['water'],"0","0",comm])
-                    res.append([f'{well_name} #{shtIn[0]}',date,0,0,0,"0","0","shut in"]);continue
-                else: twell[date] = cb[0];comm = f'{comm} no test well set, {cb[0]} used as test'
-            
-            lft = [float(day[ty]) - tprod[date][ty] for ty in typs];lft = [max(0, val) for val in lft]
-            o_lft,g_lft,w_lft = lft[0],lft[1],lft[2]
-
-            res.append([f'{well_name} #{twell[date]}',date,tprod[date]['oil'],tprod[date]['gas'],tprod[date]['water'],"0","0",comm])
-
-            if len(alct[id]['wells']) == 2:
-                wellNum = cb.pop()
-                #["Well Name","Date","Oil (BBLS)","Gas (MCF)","Water (BBLS)","TP","CP","Comments"]
-                res.append([f'{well_name} #{wellNum}',date, o_lft, g_lft, w_lft,"0","0",comm])
-            if len(alct[id]['wells']) == 3:
-                wn1 = cb.pop(); wn2 = cb.pop(); tests = alct[id]['tests'][date[:7]]
-                if twell[date] in shtIn: exit(print(f'Error: test well {twell[date]} is shut in'))
-                if len(shtIn) == 1:
-                    wellNum = wn2 if int(wn1) in shtIn else wn1
-                    res.append([f'{well_name} #{wellNum}',date, o_lft,g_lft, w_lft,"0","0",comm])
-                    res.append([f'{well_name} #{shtIn[0]}',date,0,0,0,"0","0","shut in"])
-                    
-                if len(shtIn) == 2: 
-                    res.append([f'{well_name} #{wn1}',date,0,0,0,"0","0","shut in"])
-                    res.append([f'{well_name} #{wn2}',date,0,0,0,"0","0","shut in"])  
-                
-                #no shutins allocate based on avg test for well over avg test all
-                #get allocation percent for oil gas water for each well
-                if len(shtIn) == 0:
-                    avgs = {f'{w}_{ty}':round(sum(tests[str(w)][ty])/len(tests[str(w)][ty]),2) for w in [wn1,wn2,twell[date]] for ty in typs}
-                    avg_tots = {ty: sum(v for k, v in avgs.items() if ty in k) for ty in typs}
-                    allcts = {wn1:{},wn2:{},twell[date]:{}}
-                    for k,v in avgs.items():
-                        wn,ty = k.split('_')[0],k.split('_')[1]
-                        try: allcts[int(wn)][ty] = v/avg_tots[ty]
-                        except ZeroDivisionError: allcts[int(wn)][ty] = 0
-                    #get adjusted allocation prct for non test wells
-                    del allcts[int(twell[date])]
-
-                    allct_tots = {'oil':0,'gas':0,'water':0}
-                    for _,v in allcts.items():
-                        for ty in typs: allct_tots[ty] += v[ty]
-
-                    adj_allcts = {wn1:{},wn2:{}}
-                    for well in allcts:
-                        for ty in typs: 
-                            try: adj_allcts[well][ty] = allcts[well][ty]/allct_tots[ty]
-                            except ZeroDivisionError: adj_allcts[well][ty] = 0
-                    res.append([f'{well_name} #{wn1}',date,o_lft*adj_allcts[wn1]['oil'],
-                                g_lft*adj_allcts[wn1]['gas'],w_lft*adj_allcts[wn1]['water'],"0","0",comm])
-                    res.append([f'{well_name} #{wn2}',date,o_lft*adj_allcts[wn2]['oil'],
-                                g_lft*adj_allcts[wn2]['gas'],w_lft*adj_allcts[wn2]['water'],"0","0",comm])
-                
-                #update allocations
-                #for ty in typs:
-                #    tests[str(twell[date])][ty].append(tprod[date][ty])
-                #
-                #
-                #with open('tst.json','w') as f:
-                #    json.dump(alct,f)
-        
-        return res
-        
+     
     def access(self):
         load_dotenv()
         body = {
@@ -216,6 +122,7 @@ class Field():
 
     def me(self):
         x = requests.get('https://api.iwell.info/v1/me', headers={'Authorization': f'Bearer {self.token}'})
+        self.handleCall()
         return f'{x.json()["data"]["name"]}'
 
     def GET_wellGroups(self):
@@ -314,16 +221,181 @@ class Field():
 
     def handleCall(self):
         self.calls += 1
-        if self.calls >= 23: self.calls = 0; print('sleep'); time.sleep(60)
+        if self.calls >= 295: self.calls = 0; print('sleep'); time.sleep(60)
 
+class Allocations():
+    def __init__(self,token,well_id,prod,comms,alct_db,since,imprtDays) -> None:
+        self.well_id = well_id
+        self.prod = prod
+        self.comms = comms
+        self.alct_db = alct_db
+        self.well_name = alct_db[well_id]['name']
+        tnum = iWell.GET_wellFieldValue(token,well_id,'805',since)
+        testprod = [iWell.GET_wellFieldValue(token,well_id,key,since)  for key in [806,855,807]]#oil,gas,water
+        
+        twell = {k:None for k in imprtDays}
+        
+        for test in tnum: twell[datetime.fromtimestamp(test['reading_time']).strftime('%Y-%m-%d')] = str(test['value'])
+        tprod = {k:{} for k in imprtDays}
+        for comm in comms:
+            dstr = datetime.fromtimestamp(comm['note_time']).strftime('%Y-%m-%d')
+            if dstr in tprod.keys(): tprod[dstr]['comm'] = comm['message']
 
-#if __name__ == '__main__':
-#    #df = pd.read_csv('data\prod\GC\data.csv')11441
-#    start = '2023-07-29'
-#    fld = Field('SOUTH TEXAS','TX',start)
-#    print(fld)
-#    print(fld.wells)
-#    dfimport,updates = fld.importData()
+        for i in range(len(testprod)):
+            for rd in testprod[i]:
+                dstr = datetime.fromtimestamp(rd['reading_time']).strftime('%Y-%m-%d')
+                if dstr in imprtDays: tprod[dstr][['oil','gas','water'][i]] = float(rd['value'])
+        
+        for day,prd in tprod.items():
+            misses = [i for i in ['oil','gas','water'] if i not in prd.keys()]
+            for miss in misses: tprod[day][miss] = 0#tests[id][float(twell[day])][miss]
+
+        self.twell = twell
+        self.tprod = tprod
+        print(f'test wells {self.twell}')
+
+    def lstMnthAvg(self,date,wn1,wn2):
+        lst_mnth = int(datetime.strptime(date,'%Y-%m-%d').timestamp()) - 60*60*24*int(date[-2:])
+        lst_mnth = datetime.utcfromtimestamp(lst_mnth).strftime('%Y-%m-%d')[:7]
+        tests = self.alct_db[self.well_id]['tests'][lst_mnth]
+        print(f'tests {tests}')
+        avgs = {f'{w}_{ty}':round(sum(tests[str(w)][ty])/len(tests[str(w)][ty]),2) 
+                for w in [wn1,wn2,self.twell[date]] for ty in ['oil','gas','water']}
+        
+        #res = {w:{'oil':[],'gas':[],'water':[]} for w in [wn1,wn2,self.twell[date]]}
+        #for k,v in avgs.items():
+        #    unpack = k.split('_')
+        #    res[int(unpack[0])][unpack[1]].append(v)
+        #print(f'res {res}')
+        #self.alct_db[self.well_id]['tests'][date[:7]] = res
+        #with open('data\prod\\NM\\allocations.json','w') as f:
+        #    json.dump(self.alct_db,f)
+        return  avgs
+
+    def assignComm(self,comm,commtw,*wells):
+        print(f'comm {comm}')
+
+        splt_comm = {w:'' for w in wells}
+        print(f'spl {splt_comm}')
+        for k in splt_comm.keys(): 
+            if str(k) in comm: splt_comm[k] = comm
+        s = set(splt_comm.values()); s.add(commtw)   
+        if len(s) == 1 and '' in s: splt_comm = {w:comm for w in wells}    
+
+        return splt_comm
+    
+    def allocate(self) -> list:
+        typs = ['oil','gas','water']
+        res = []
+        for day in self.prod:
+            date = day['date']
+            print(f'date {date}')
+            comm = self.tprod[date]['comm'] if 'comm' in self.tprod[date].keys() else ""
+            shtIn = self.alct_db[self.well_id]['shutIn'][date] if date in self.alct_db[self.well_id]['shutIn'].keys() else []
+            
+            wells_cpy = self.alct_db[self.well_id]['wells'][:]
+            if self.twell[date] in wells_cpy: wells_cpy.remove(self.twell[date])
+
+            if self.twell[date] is None or self.twell[date] not in self.alct_db[self.well_id]['wells']:#no test well
+                if len(shtIn) == 1 and len(wells_cpy) == 2:
+                    wn1 = wells_cpy.pop(); wn2 = wells_cpy.pop()
+                    if comm != "": comm = self.assignComm(comm,wn1,wn2)
+                    wellNum = wn2 if str(wn1) in shtIn else wn1
+                    res.append([f'{self.well_name} #{wellNum}',date,day['oil'],day['gas'],day['water'],"0","0",comm[wellNum]])
+                    res.append([f'{self.well_name} #{shtIn[0]}',date,0,0,0,"0","0",f"shut in, {comm[shtIn[0]]}"]);continue
+                else: self.twell[date] = wells_cpy[0];comm = f'{comm} no test well set, {wells_cpy[0]} used as test'#3 wells ; need to check shtin
+            
+            lft = [float(day[ty]) - self.tprod[date][ty] for ty in typs];lft = [max(0, val) for val in lft]
+            o_lft,g_lft,w_lft = lft[0],lft[1],lft[2]
+            
+            commtw = comm if str(self.twell[date]) in comm else ''
+            res.append([f'{self.well_name} #{self.twell[date]}',date,self.tprod[date]['oil'],
+                        self.tprod[date]['gas'],self.tprod[date]['water'],"0","0",commtw])
+
+            if len(self.alct_db[self.well_id]['wells']) == 2:
+                wellNum = wells_cpy.pop(); comm1 = comm if str(wellNum) in comm else ''
+                if commtw == '' and comm != '': comm1 = comm
+                res.append([f'{self.well_name} #{wellNum}',date, o_lft, g_lft, w_lft,"0","0",comm1])
+
+            if len(self.alct_db[self.well_id]['wells']) == 3:
+                wn1 = wells_cpy.pop(); wn2 = wells_cpy.pop(); comm = self.assignComm(comm,commtw,wn1,wn2)
+                prevAvgs = self.lstMnthAvg(date,wn1,wn2)
+                try: tests = self.alct_db[self.well_id]['tests'][date[:7]]
+                except KeyError: #first of mnth
+                    print(f'key errr')
+                    avgs = prevAvgs
+                    self.alct_db[self.well_id]['tests'][date[:7]] = {w:{'oil':[],'gas':[],'water':[]}
+                                                                      for w in [wn1,wn2,self.twell[date]]}
+                    tests = self.alct_db[self.well_id]['tests'][date[:7]]
+                print(f'tw {self.twell}')
+                print(f'date {date}')
+                if self.twell[date] in shtIn: exit(print(f'Error: test well {self.twell[date]} is shut in'))
+                if len(shtIn) == 1:
+                    wellNum = wn2 if int(wn1) in shtIn else wn1
+                    res.append([f'{self.well_name} #{wellNum}',date, o_lft,g_lft, w_lft,"0","0",comm[wellNum]])
+                    res.append([f'{self.well_name} #{shtIn[0]}',date,0,0,0,"0","0",f"shut in, {comm[shtIn[0]]}"])
+                    
+                if len(shtIn) == 2: 
+                    res.append([f'{self.well_name} #{wn1}',date,0,0,0,"0","0",f"shut in, {comm[wn1]}"])
+                    res.append([f'{self.well_name} #{wn2}',date,0,0,0,"0","0",f"shut in, {comm[wn2]}"])  
+                
+                #no shutins allocate based on avg test for well over avg test all
+                #get allocation percent for oil gas water for each well
+                if len(shtIn) == 0: 
+                    if date[-2:] != '01': 
+                        tests = self.alct_db[self.well_id]['tests'][date[:7]]
+                        avgs = {}
+                        for w in wn1,wn2,self.twell[date]:
+                            for ty in typs:
+                                try: avgs[f'{w}_{ty}'] = round(sum(tests[str(w)][ty])/len(tests[str(w)][ty]),2)
+                                except ZeroDivisionError:  avgs[f'{w}_{ty}'] = 0
+                        short = []
+                        for w in [wn1,wn2,self.twell[date]]: 
+                            if len(tests[w]['oil']) < 3: short.append(w)
+                        print(f'shorts {short}')
+                        for w in short:
+                            for ty in typs: avgs[f'{w}_{ty}'] = prevAvgs[f'{w}_{ty}']
+                    
+                    avg_tots = {ty: sum(v for k, v in avgs.items() if ty in k) for ty in typs}
+                    allcts = {wn1:{},wn2:{},self.twell[date]:{}}
+                    for k,v in avgs.items():
+                        wn,ty = k.split('_')[0],k.split('_')[1]
+                        try: allcts[str(wn)][ty] = v/avg_tots[ty]
+                        except ZeroDivisionError: allcts[str(wn)][ty] = 0
+                    #get adjusted allocation prct for non test wells
+                    del allcts[str(self.twell[date])]
+
+                    allct_tots = {'oil':0,'gas':0,'water':0}
+                    for _,v in allcts.items():
+                        for ty in typs: allct_tots[ty] += v[ty]
+
+                    adj_allcts = {wn1:{},wn2:{}}
+                    for well in allcts:
+                        for ty in typs: 
+                            try: adj_allcts[well][ty] = allcts[well][ty]/allct_tots[ty]
+                            except ZeroDivisionError: adj_allcts[well][ty] = 0
+                    res.append([f'{self.well_name} #{wn1}',date,o_lft*adj_allcts[wn1]['oil'],
+                                g_lft*adj_allcts[wn1]['gas'],w_lft*adj_allcts[wn1]['water'],"0","0",comm[wn1]])
+                    res.append([f'{self.well_name} #{wn2}',date,o_lft*adj_allcts[wn2]['oil'],
+                                g_lft*adj_allcts[wn2]['gas'],w_lft*adj_allcts[wn2]['water'],"0","0",comm[wn2]])
+                
+                #update allocations
+                try: 
+                    for ty in typs: tests[str(self.twell[date])][ty].append(self.tprod[date][ty])
+                except KeyError: 
+                    for ty in typs: tests[int(self.twell[date])][ty].append(self.tprod[date][ty])
+                print(f'tests {tests}')
+                print(f'self.alct_db {self.alct_db[self.well_id]["tests"]}')
+                with open('data\prod\\NM\\allocations.json','w') as f: json.dump(self.alct_db,f)
+        return res
+
+if __name__ == '__main__':
+    #df = pd.read_csv('data\prod\GC\data.csv')11441
+    start = '2023-08-02'
+    fld = Field('New Mexico','NM',start)
+    print(fld)
+    print(fld.wells)
+    dfimport,updates = fld.importData()
     
 
 
