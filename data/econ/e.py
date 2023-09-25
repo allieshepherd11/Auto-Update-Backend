@@ -58,8 +58,8 @@ def main():
     #print(f': {combined_df}')
     
     resdf = pd.DataFrame(combined_df)
-    resdf.to_json('db/econ/pl16_23.json',orient="records")
-
+    resdf.to_json('db/econ/pl16_231.json',orient="records")
+    exit()
     well_map = {}
     for dictionary in [well_map16, well_map17, well_map18, well_map19, well_map20,well_map21, well_map22, well_map23]:
         temp_dict = {k: v for k, v in dictionary.items() if k not in well_map}
