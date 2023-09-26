@@ -32,9 +32,9 @@ class Field():
         since = datetime.strptime(str(self.start), "%Y-%m-%d").timestamp()
         updates = []
         importData = []
+        print(f'wells {self.wells.items()}')
         for well,id in self.wells.items():
             if 'Compressor' in well or 'Drip' in well or 'SWD' in well: continue
-            if well == 'Paddy 19 State #1 #4 #5':continue
             try:
                 prod = self.GET_wellProduction(id,since)
                 comms = self.GET_wellComments(id,since)
