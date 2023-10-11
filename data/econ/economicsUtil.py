@@ -32,12 +32,16 @@ def main():
     
     # Update the month each time program runs
     df_pl['Date'] = 'Apr 2023'
-    df_pl.to_json("../STprodWebsite/STprod/static/economics.json", orient='records')
+    df_pl.to_json("../frontend/data/econ/economics.json", orient='records')
+    #df_pl.to_json("../STprodWebsite/STprod/static/economics.json", orient='records')
+    #path to (frontend) data/econ/economics.json
 
     # PAYOUTS
     df = pd.read_excel('payouts.xlsx', usecols='A,T')
     df_payouts = df.copy()
-    df_payouts.to_json("../STprodWebsite/STprod/static/payouts.json", orient='records')
+    df_pl.to_json("../frontend/data/econ/payouts.json", orient='records')
+    #df_payouts.to_json("../STprodWebsite/STprod/static/payouts.json", orient='records')
+    #path to (frontend) data/econ/payouts.json
 
 if __name__ == '__main__':
     main()
