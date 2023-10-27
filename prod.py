@@ -2,8 +2,8 @@ import pandas as pd
 from datetime import datetime
 import time
 import json
-from report import ProdReport
-from field import Field
+from Report import ProdReport
+from Field import Field
 import webbrowser
 
 def prod(field,abbr):
@@ -39,7 +39,10 @@ def prod(field,abbr):
     if fld.abbr == 'ST': recYrProd(df,fld.abbr)
     if fld.abbr == 'WT': df = handleWT(df)
     title = f'{fld.field} Total' if fld.field != 'West TX' else 'West Texas Total'
+    
+
     title = title.title()
+    
     df = df[df['Well Name'] != title]
     df['Well Name'] = df['Well Name'].str.title()
     wnMap = {'Cr #101': 'CR #101','Cr #201': 'CR #201','Cr #301': 'CR #301',
@@ -50,10 +53,10 @@ def prod(field,abbr):
              'Bruce Weaver #2 Re': 'Bruce Weaver #2 RE','Vre Minerals #1':'VRE Minerals #1',
              'Dial #1 St': 'Dial #1 ST', 'Ra #1': 'RA #1','Ck #1': 'CK #1', 'Clary Rb #1': 'Clary RB #1',
              'Mcduffie Unit #1': 'McDuffie Unit #1', 'Mt Unit #1H': 'MT Unit #1H', 'Ws #1': 'WS #1',
-             'Ee 12 #1': 'EE 12 #1','Jm Moore': 'JM Moore','Cl Moore 12': 'CL Moore 12','Ab Pad 10 St. #1': 'Ab Pad State #1',
+             'Ee 12 #1': 'EE 12 #1','Jm Moore': 'JM Moore','Cl Moore 12': 'CL Moore 12','Ab Pad 10 St. #1': 'AB Pad 10 State #1',
              'Cw 14 State #1': 'CW 14 State #1','Blair Txl #1': 'Blair TXL #1','Blair Txl #2': 'Blair TXL #2',
              'Blair Txl #3': 'Blair TXL #3','Llb 15 #1': 'LLB 15 #1','South Juwf': 'South JUWF', 'North Juwf':'North JUWF',
-             'Triple A Federal #3': 'Triple A Fed #3'}
+             'Triple A Federal #3': 'Triple A Fed #3','Cmww #1':'CMWW #1','Cmww #2':'CMWW #2'}
     
     for k,v in wnMap.items(): df.loc[df['Well Name'] == k,'Well Name'] = v
     df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
@@ -299,9 +302,8 @@ def lstProd(field,day):#day YYYY-MM-dd
 
 if __name__ == '__main__':
     for abbr,field in {'ST':'SOUTH TEXAS','ET':'EAST TEXAS','GC':'Gulf Coast','WT':'West TX','NM':'New Mexico'}.items():
-        if abbr != 'ST':continue
         prod(field=field,abbr=abbr); move(field=abbr)
-        ProdReport(field=abbr,title=field).genReport()
-        webbrowser.open_new_tab(f'C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\backend\\data\\prod\\{abbr}\\report.pdf')
-    ProdReport(field='WB',title='Woodbine').genReport()
-    webbrowser.open_new_tab(f'C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\backend\\data\\prod\\WB\\report.pdf')
+#       ProdReport(field=abbr,title=field).genReport()
+ #       webbrowser.open_new_tab(f'C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\backend\\data\\prod\\{abbr}\\report.pdf')
+  #  ProdReport(field='WB',title='Woodbine').genReport()
+   # webbrowser.open_new_tab(f'C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\backend\\data\\prod\\WB\\report.pdf')
