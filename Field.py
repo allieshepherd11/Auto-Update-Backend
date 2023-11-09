@@ -42,7 +42,8 @@ class Field():
                 cp = self.GET_wellFieldValue(id,1415,since)
                 print(well)
             except requests.exceptions.ConnectionError as e: 
-                print(f"API Limit on {well}");time.sleep(61)
+                print(f'\n{e}\n')
+                print(f"For well {well}");time.sleep(61)
                 prod = self.GET_wellProduction(id,since)
                 comms = self.GET_wellComments(id,since)
                 tp = self.GET_wellFieldValue(id,607,since)
