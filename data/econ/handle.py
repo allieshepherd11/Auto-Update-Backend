@@ -2,7 +2,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 def payouts():
-    excel_file = pd.ExcelFile('data\econ\payoutsOct23.xlsx')
+    excel_file = pd.ExcelFile('data\econ\payoutsNov23.xlsx')
 
     sheet_names = excel_file.sheet_names
     dfs = []
@@ -26,7 +26,7 @@ def economics():
     df = df[1:]
     print(df)
 
-    rec_mnth = 'Aug 2023'
+    rec_mnth = 'Sep 2023'
 
     rec_mnth_dt = (datetime.strptime(rec_mnth, '%b %Y').replace(day=1) + timedelta(days=32))\
                         .replace(day=1) - timedelta(days=1)
