@@ -10,7 +10,7 @@ def main():
     # pd.options.display.float_format = '${:,.2f}'.format
 
     # Change usecols to update to current month
-    df = pd.read_excel('2023_P&L.xlsx', usecols='B,I:L')
+    df = pd.read_excel('data\econ\\2023_P&L.xlsx', usecols='B,I:L')
     df_pl = df.copy()
     df_pl['YTD P&L'] = 0
     # months = ['Jan', 'Feb', 'Mar', 'April', 'May', 'Jun']
@@ -31,15 +31,16 @@ def main():
     print(df_pl)
     
     # Update the month each time program runs
-    df_pl['Date'] = 'Apr 2023'
+    df_pl['Date'] = 'S 2023'
     df_pl.to_json("../frontend/data/econ/economics.json", orient='records')
     #df_pl.to_json("../STprodWebsite/STprod/static/economics.json", orient='records')
     #path to (frontend) data/econ/economics.json
 
     # PAYOUTS
-    df = pd.read_excel('payouts.xlsx', usecols='A,T')
-    df_payouts = df.copy()
-    df_pl.to_json("../frontend/data/econ/payouts.json", orient='records')
+    print(df)
+    exit()
+    df.to_json("C:\\Users\\plaisancem\\Documents\\Dev\\Apps\\Prod\\frontend\\data\\econ\\economics2.json", orient='records')
+    
     #df_payouts.to_json("../STprodWebsite/STprod/static/payouts.json", orient='records')
     #path to (frontend) data/econ/payouts.json
 

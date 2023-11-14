@@ -18,4 +18,7 @@ def fetchGh(repo_owner,repo,file_path):
     else: print(f"Failed: {response.status_code} - {response.text}")
 
 
-if __name__ == "__main__": fetchGh(repo_owner='dailyprod',repo='prod',file_path='data/ST/prodST.json')
+if __name__ == "__main__": 
+    fetchGh(repo_owner='dailyprod',repo='prod',file_path='data/ST/prodST.json')
+    #import subprocess
+    #subprocess.run(['node', 'ghApi.mjs'])
