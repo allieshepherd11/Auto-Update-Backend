@@ -17,11 +17,11 @@ def prod(field,abbr):
     ##Import recent data from iwell
     fld = Field(field,abbr,start)
     ##
-    dfImport,updates = fld.importData()
-    for i in updates:
-        mask = (df['Well Name'] == i["Well Name"]) & (df['Date'] == i["date"])
-        df.loc[mask, ['Oil (BBLS)', 'Gas (MCF)', 'Water (BBLS)']] = i["oil"], i["gas"], i["water"]
-    df = pd.concat([df,dfImport]).drop_duplicates()
+    #dfImport,updates = fld.importData()
+    #for i in updates:
+    #    mask = (df['Well Name'] == i["Well Name"]) & (df['Date'] == i["date"])
+    #    df.loc[mask, ['Oil (BBLS)', 'Gas (MCF)', 'Water (BBLS)']] = i["oil"], i["gas"], i["water"]
+    #df = pd.concat([df,dfImport]).drop_duplicates()
     df['Oil (BBLS)'] = pd.to_numeric(df['Oil (BBLS)'], errors='coerce')
 
     df['Oil (BBLS)'] = pd.to_numeric(df['Oil (BBLS)'])
@@ -302,6 +302,7 @@ def lstProd(field,day):#day YYYY-MM-dd
 
 if __name__ == '__main__':
     for abbr,field in {'ST':'SOUTH TEXAS','ET':'EAST TEXAS','GC':'Gulf Coast','WT':'West TX','NM':'New Mexico'}.items():
+        if abbr != 'ST':continue
         prod(field=field,abbr=abbr); move(field=abbr)
 #       ProdReport(field=abbr,title=field).genReport()
  #       webbrowser.open_new_tab(f'C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\backend\\data\\prod\\{abbr}\\report.pdf')
