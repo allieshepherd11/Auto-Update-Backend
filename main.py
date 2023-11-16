@@ -17,11 +17,11 @@ def prod(field,abbr):
     ##Import recent data from iwell
     fld = Field(field,abbr,start)
     ##
-    #dfImport,updates = fld.importData()
-    #for i in updates:
-    #    mask = (df['Well Name'] == i["Well Name"]) & (df['Date'] == i["date"])
-    #    df.loc[mask, ['Oil (BBLS)', 'Gas (MCF)', 'Water (BBLS)']] = i["oil"], i["gas"], i["water"]
-    #df = pd.concat([df,dfImport]).drop_duplicates()
+    dfImport,updates = fld.importData()
+    for i in updates:
+        mask = (df['Well Name'] == i["Well Name"]) & (df['Date'] == i["date"])
+        df.loc[mask, ['Oil (BBLS)', 'Gas (MCF)', 'Water (BBLS)']] = i["oil"], i["gas"], i["water"]
+    df = pd.concat([df,dfImport]).drop_duplicates()
     df['Oil (BBLS)'] = pd.to_numeric(df['Oil (BBLS)'], errors='coerce')
 
     df['Oil (BBLS)'] = pd.to_numeric(df['Oil (BBLS)'])
@@ -56,7 +56,7 @@ def prod(field,abbr):
              'Ee 12 #1': 'EE 12 #1','Jm Moore': 'JM Moore','Cl Moore 12': 'CL Moore 12','Ab Pad 10 St. #1': 'AB Pad 10 State #1',
              'Cw 14 State #1': 'CW 14 State #1','Blair Txl #1': 'Blair TXL #1','Blair Txl #2': 'Blair TXL #2',
              'Blair Txl #3': 'Blair TXL #3','Llb 15 #1': 'LLB 15 #1','South Juwf': 'South JUWF', 'North Juwf':'North JUWF',
-             'Triple A Federal #3': 'Triple A Fed #3','Cmww #1':'CMWW #1','Cmww #2':'CMWW #2'}
+             'Triple A Federal #3': 'Triple A Fed #3','Cmww #1':'CMWW #1','Cmww #2':'CMWW #2','La Rosita #1 Re':'La Rosita #1 RE'}
     
     for k,v in wnMap.items(): df.loc[df['Well Name'] == k,'Well Name'] = v
     df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
@@ -98,9 +98,10 @@ def prod(field,abbr):
   
     df.to_json(f"data\\prod\\{fld.abbr}\\data.json", orient='values', date_format='iso') #updating loc json file
     dfsum.to_json(f"data\\prod\\{fld.abbr}\\cuml.json", orient='values', date_format='iso')
-
-    #if fld.abbr == "ST": update_pumpInfo(); analyze(pd.read_csv(f'data\\prod\\{fld.abbr}\\data.csv'),'ST')
-
+    try:
+        if fld.abbr == "ST": update_pumpInfo(); analyze(pd.read_csv(f'data\\prod\\{fld.abbr}\\data.csv'),'ST')
+    except:
+        print("ONE DRIVE ERROR")
     return
 
 def write_formations():
@@ -117,6 +118,9 @@ def update_pumpInfo():
     pd.read_excel("C:\\Users\\plaisancem\\OneDrive - CML Exploration\\CML\\STprod.xlsx"
                     ).drop(['Date','Notes','Oil','Gas','Water','Comments'],axis=1
                         ).to_json('data\\prod\\ST\\pumpInfo.json',orient='records')
+    df = pd.read_excel("C:\\Users\\plaisancem\\OneDrive - CML Exploration\\CML\\STprod.xlsx")
+    df = df.drop([col for col in df.columns if col not in ['Well Name','C','SPM','DH SL','Ideal bfpd','Pump Depth','GFLAP','Inc']],axis=1)
+    df.to_json('..frontend/data/ST/pumpInfo.json',orient='records')
     return 
 
 def analyze(df,field):
@@ -302,7 +306,7 @@ def lstProd(field,day):#day YYYY-MM-dd
 
 if __name__ == '__main__':
     for abbr,field in {'ST':'SOUTH TEXAS','ET':'EAST TEXAS','GC':'Gulf Coast','WT':'West TX','NM':'New Mexico'}.items():
-        if abbr != 'ST':continue
+        if abbr == 'ST':continue
         prod(field=field,abbr=abbr); move(field=abbr)
 #       ProdReport(field=abbr,title=field).genReport()
  #       webbrowser.open_new_tab(f'C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\backend\\data\\prod\\{abbr}\\report.pdf')
