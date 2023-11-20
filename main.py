@@ -6,7 +6,7 @@ from Report import ProdReport
 from Field import Field
 import webbrowser
 
-def prod(field,abbr):
+def prod(field,abbr,importProd=True):
     print(f'field {field}')
     dtype = {'Oil (BBLS)': float, 'Water (BBLS)': float, 'Gas (MCF)': float, 'TP': str, 'CP': str, 'Comments': str}
     df = pd.read_csv(f'data\\prod\\{abbr}\\data.csv', dtype=dtype)
@@ -17,11 +17,12 @@ def prod(field,abbr):
     ##Import recent data from iwell
     fld = Field(field,abbr,start)
     ##
-    dfImport,updates = fld.importData()
-    for i in updates:
-        mask = (df['Well Name'] == i["Well Name"]) & (df['Date'] == i["date"])
-        df.loc[mask, ['Oil (BBLS)', 'Gas (MCF)', 'Water (BBLS)']] = i["oil"], i["gas"], i["water"]
-    df = pd.concat([df,dfImport]).drop_duplicates()
+    if importProd:
+        dfImport,updates = fld.importData()
+        for i in updates:
+            mask = (df['Well Name'] == i["Well Name"]) & (df['Date'] == i["date"])
+            df.loc[mask, ['Oil (BBLS)', 'Gas (MCF)', 'Water (BBLS)']] = i["oil"], i["gas"], i["water"]
+        df = pd.concat([df,dfImport]).drop_duplicates()
     df['Oil (BBLS)'] = pd.to_numeric(df['Oil (BBLS)'], errors='coerce')
 
     df['Oil (BBLS)'] = pd.to_numeric(df['Oil (BBLS)'])
@@ -83,8 +84,8 @@ def prod(field,abbr):
     df = pd.concat([df, dfTotal])
     df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
     df = df.reset_index(drop=True)
-    df['7DMA'] = df.groupby('Well Name')['Oil (BBLS)'].transform(lambda x: x.rolling(7, 1).mean().round(1))
-   
+    df['7DMA'] = df.groupby('Well Name')['Oil (BBLS)'].transform(lambda x: x.rolling(window=7, min_periods=1).mean())
+
     # ADD DATE COLUMN FOR X AXIS USE (DateYAxis) & CHANGING DATATYPE TO Object
     df['DateYAxis'] =  df['Date']
     df['DateYAxis'] =  pd.to_datetime(df['Date'])
@@ -98,10 +99,12 @@ def prod(field,abbr):
   
     df.to_json(f"data\\prod\\{fld.abbr}\\data.json", orient='values', date_format='iso') #updating loc json file
     dfsum.to_json(f"data\\prod\\{fld.abbr}\\cuml.json", orient='values', date_format='iso')
+    
     try:
         if fld.abbr == "ST": update_pumpInfo(); analyze(pd.read_csv(f'data\\prod\\{fld.abbr}\\data.csv'),'ST')
-    except:
-        print("ONE DRIVE ERROR")
+    except Exception as e:
+        print(f'Pump/analyze ERROR {e}')
+
     return
 
 def write_formations():
@@ -115,12 +118,9 @@ def write_formations():
         json.dump(dd,f)
 
 def update_pumpInfo():
-    pd.read_excel("C:\\Users\\plaisancem\\OneDrive - CML Exploration\\CML\\STprod.xlsx"
-                    ).drop(['Date','Notes','Oil','Gas','Water','Comments'],axis=1
-                        ).to_json('data\\prod\\ST\\pumpInfo.json',orient='records')
     df = pd.read_excel("C:\\Users\\plaisancem\\OneDrive - CML Exploration\\CML\\STprod.xlsx")
     df = df.drop([col for col in df.columns if col not in ['Well Name','C','SPM','DH SL','Ideal bfpd','Pump Depth','GFLAP','Inc']],axis=1)
-    df.to_json('..frontend/data/ST/pumpInfo.json',orient='records')
+    df.to_json('../frontend/data/ST/pumpInfo.json',orient='records')
     return 
 
 def analyze(df,field):
@@ -151,7 +151,6 @@ def analyze(df,field):
     
     schedule = [item for item in schedule if item not in res]
     dfcsv = df[df['MA Ratio'] < .8]
-    dfcsv.to_excel('check.xlsx',index=False)
     df_analysis = df[
         ((df['Date'] == rec_date) & (df['30DMA'] > 6) & 
         (
@@ -306,7 +305,6 @@ def lstProd(field,day):#day YYYY-MM-dd
 
 if __name__ == '__main__':
     for abbr,field in {'ST':'SOUTH TEXAS','ET':'EAST TEXAS','GC':'Gulf Coast','WT':'West TX','NM':'New Mexico'}.items():
-        if abbr == 'ST':continue
         prod(field=field,abbr=abbr); move(field=abbr)
 #       ProdReport(field=abbr,title=field).genReport()
  #       webbrowser.open_new_tab(f'C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\backend\\data\\prod\\{abbr}\\report.pdf')
