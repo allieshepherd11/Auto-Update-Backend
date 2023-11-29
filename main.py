@@ -305,10 +305,4 @@ def lstProd(field,day):#day YYYY-MM-dd
 
 if __name__ == '__main__':
     for abbr,field in {'ST':'SOUTH TEXAS','ET':'EAST TEXAS','GC':'Gulf Coast','WT':'West TX','NM':'New Mexico'}.items():
-        moProd(abbr)
-        continue
         prod(field=field,abbr=abbr); move(field=abbr)
-#       ProdReport(field=abbr,title=field).genReport()
- #       webbrowser.open_new_tab(f'C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\backend\\data\\prod\\{abbr}\\report.pdf')
-  #  ProdReport(field='WB',title='Woodbine').genReport()
-   # webbrowser.open_new_tab(f'C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\backend\\data\\prod\\WB\\report.pdf')

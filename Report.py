@@ -247,7 +247,7 @@ def emailBody(date=None):
 
 if __name__ == '__main__':
     for field,title in {'ST':'South Texas','ET':'East Texas','WT':'West TX','GC':'Gulf Coast','NM':'New Mexico'}.items():
-        reprt = ProdReport(field=field,title=title)
+        reprt = ProdReport(field=field,title=title,day='2023-11-18')
         reprt.genReport()
         webbrowser.open_new_tab(f"C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\backend\\data\\prod\\{field}\\report.pdf")
     reprt = ProdReport(field='WB',title='Woodbine')
