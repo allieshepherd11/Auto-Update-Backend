@@ -35,19 +35,9 @@ class Field():
         print(f'wells {self.wells.items()}')
         for well,id in self.wells.items():
             if 'Compressor' in well or 'Drip' in well or 'SWD' in well: continue
-            try:
-                prod = self.GET_wellProduction(id,since)
-                comms = self.GET_wellComments(id,since)
-                tp = self.GET_wellFieldValue(id,607,since)
-                cp = self.GET_wellFieldValue(id,1415,since)
-                print(well)
-            except requests.exceptions.ConnectionError as e: 
-                print(f'\n{e}\n')
-                print(f"For well {well}");time.sleep(61)
-                prod = self.GET_wellProduction(id,since)
-                comms = self.GET_wellComments(id,since)
-                tp = self.GET_wellFieldValue(id,607,since)
-                cp = self.GET_wellFieldValue(id,1415,since)
+
+            print(well)
+            prod,comms,tp,cp = self.fetch_data(id,since)
             
             for i in prod[:]:
                 if i["production_time"] != i["updated_at"] and i["production_time"] < since and i["date"] != str(datetime.today().date()):#gets updated prod, but not today or updates since last import
@@ -114,6 +104,20 @@ class Field():
 
         return dfimport,updates
      
+    def fetch_data(self,id,since):
+        prod,comms,tp,cp = None,None,None,None
+                
+        try:
+            prod = self.GET_wellProduction(id,since)
+            comms = self.GET_wellComments(id,since)
+            tp = self.GET_wellFieldValue(id,607,since)
+            cp = self.GET_wellFieldValue(id,1415,since)
+        except requests.exceptions.ConnectionError as e: 
+            print('connection error')
+            time.sleep(10);print('trying again..\n')
+            return self.fetch_data(id,since)
+        return prod,comms,tp,cp
+    
     def access(self):
         load_dotenv()
         body = {
