@@ -120,7 +120,7 @@ def write_formations():
 def update_pumpInfo():
     df = pd.read_excel("C:\\Users\\plaisancem\\OneDrive - CML Exploration\\CML\\STprod.xlsx")
     df = df.drop([col for col in df.columns if col not in ['Well Name','C','SPM','DH SL','Ideal bfpd','Pump Depth','GFLAP','Inc']],axis=1)
-    df.to_json('../frontend/data/ST/pumpInfo.json',orient='records')
+    df.to_json('../frontend/data/ST/pumpInfo.json',orient='records',date_format='iso')
     return 
 
 def analyze(df,field):
@@ -305,4 +305,5 @@ def lstProd(field,day):#day YYYY-MM-dd
 
 if __name__ == '__main__':
     for abbr,field in {'ST':'SOUTH TEXAS','ET':'EAST TEXAS','GC':'Gulf Coast','WT':'West TX','NM':'New Mexico'}.items():
-        prod(field=field,abbr=abbr); move(field=abbr)
+        prod(field=field,abbr=abbr) 
+        move(field=abbr)

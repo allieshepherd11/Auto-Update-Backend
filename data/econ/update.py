@@ -20,12 +20,10 @@ def payouts():
     df.to_json("C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\frontend\\data\\econ\\payouts1.json", orient='records')
 
 def economics():
-    df = pd.read_excel("data\econ/2023_P&L.xlsx")
+    df = pd.read_excel("data\econ/23plst.xlsx")
 
-    df.columns = df.iloc[0]
-    print(df)
-    exit()
-    rec_mnth = 'Sep 2023'
+    df.columns = df.iloc[0].reset_index(drop=True)
+    rec_mnth = 'Oct 2023'
 
     rec_mnth_dt = (datetime.strptime(rec_mnth, '%b %Y').replace(day=1) + timedelta(days=32))\
                         .replace(day=1) - timedelta(days=1)
@@ -33,12 +31,11 @@ def economics():
     df = df.drop([col for col in df.columns if col not in ['Well List:','YTD Gain/Loss',rec_mnth_dt]],axis=1)
     df = df.rename(columns={rec_mnth_dt:'Recent Month P&L','Well List:':'Well Name','YTD Gain/Loss':'YTD P&L'})
     print(df)
-    exit()
     df = df.sort_values(['Well Name'], ascending = [True]).reset_index(drop=True)
     df['Date'] = rec_mnth
     df = df.dropna()
     df.loc[df['Well Name'] == '"BRUCE WEAVER #2','Well Name'] = "BRUCE WEAVER #2 RE"
     print(df)
-    df.to_json('C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\frontend\\data\\econ\\economics.json',orient='records')
+    df.to_json('C:\\Users\\plaisancem\\Documents\\dev\\Apps\\Prod\\frontend\\data\\econ\\economics1.json',orient='records')
 
 economics()

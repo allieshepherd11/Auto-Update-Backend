@@ -342,6 +342,7 @@ class Allocations():
             if len(self.alct_db[self.well_id]['wells']) == 3:
                 wn1 = wells_cpy.pop(); wn2 = wells_cpy.pop(); comm = self.assignComm(comm,commtw,wn1,wn2)
                 prevAvgs = self.lstMnthAvg(date,wn1,wn2)
+
                 try: tests = self.alct_db[self.well_id]['tests'][date[:7]]
                 except KeyError: #first of mnth
                     print(f'key errr')
@@ -349,7 +350,9 @@ class Allocations():
                     self.alct_db[self.well_id]['tests'][date[:7]] = {w:{'oil':[],'gas':[],'water':[]}
                                                                       for w in [wn1,wn2,self.twell[date]]}
                     tests = self.alct_db[self.well_id]['tests'][date[:7]]
+
                 if self.twell[date] in shtIn: exit(print(f'Error: test well {self.twell[date]} is shut in'))
+                
                 if len(shtIn) == 1:
                     wellNum = wn2 if int(wn1) in shtIn else wn1
                     res.append([f'{self.well_name} #{wellNum}',date, o_lft,g_lft, w_lft,"0","0",comm[wellNum]])
