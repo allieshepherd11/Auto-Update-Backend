@@ -17,7 +17,7 @@ def payouts():
         .sort_values(['Well Name'], ascending = [True]).reset_index(drop=True)
     df = df[df['Well Name'] != 'Well Name']
     print(df)
-    df.to_json("C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\frontend\\data\\econ\\payouts1.json", orient='records')
+    df.to_json("C:/Users/plaisancem/Documents/dev/prod_app/frontend/data/econ/payouts1.json", orient='records')
 
 def economics():
     df = pd.read_excel("data\econ/23plst.xlsx")

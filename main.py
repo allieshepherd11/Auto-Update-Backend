@@ -124,8 +124,8 @@ def update_pumpInfo():
     return 
 
 def analyze(df,field):
-    schedule = pd.read_excel('C:\\Users\\plaisancem\\OneDrive - CML Exploration\\CML\\South Texas\\2023-07 OnOff Schedule.xlsx')
-    mask = schedule['July Schedule'].str.contains(r'On') & schedule['July Schedule'].str.contains(r'Off')
+    schedule = pd.read_excel('C:\\Users\\plaisancem\\OneDrive - CML Exploration\\CML\\South Texas\\2023-12 OnOff Schedule.xlsx')
+    mask = schedule['December Schedule'].str.contains(r'On') & schedule['December Schedule'].str.contains(r'Off')
     
     schedule = schedule[mask]
     schedule = schedule['Well Name'].tolist()
