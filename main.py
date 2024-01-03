@@ -5,6 +5,8 @@ import json
 from Report import ProdReport
 from Field import Field
 import webbrowser
+import numpy as np
+import re
 
 def prod(field,abbr,importProd=True):
     print(f'field {field}')
@@ -82,9 +84,13 @@ def prod(field,abbr,importProd=True):
     dfTotal['Well Name'],dfTotal['TP'],dfTotal['CP'],dfTotal['Comments'] = title.title(),"","",""
     
     df = pd.concat([df, dfTotal])
-    df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
-    df = df.reset_index(drop=True)
-    df['7DMA'] = df.groupby('Well Name')['Oil (BBLS)'].transform(lambda x: x.rolling(window=7, min_periods=1).mean())
+    df['Total Fluid'] = df['Oil (BBLS)'] + df['Water (BBLS)']
+
+    df = df.sort_values(['Date', 'Well Name'], ascending = [True , True]).reset_index(drop=True)
+    df['7DMA Oil'] = df.groupby('Well Name')['Oil (BBLS)'].rolling(window=7).mean().reset_index(level=0, drop=True)
+    df['7DMA Fluid'] = df.groupby('Well Name')['Total Fluid'].rolling(window=7).mean().reset_index(level=0, drop=True)
+    df['30DMA Oil'] = df.groupby('Well Name')['Oil (BBLS)'].rolling(window=30).mean().reset_index(level=0, drop=True)
+    df = df.sort_values(['Date', 'Well Name'], ascending = [False , True]).reset_index(drop=True)
 
     # ADD DATE COLUMN FOR X AXIS USE (DateYAxis) & CHANGING DATATYPE TO Object
     df['DateYAxis'] =  df['Date']
@@ -94,18 +100,63 @@ def prod(field,abbr,importProd=True):
     df['Date'] =  pd.to_datetime(df['Date'])
     df['Date'] = df['Date'].dt.strftime('%B %d, %Y')
     
-    df['Total Fluid'] = df['Oil (BBLS)'] + df['Water (BBLS)']
-    df = df[["Well Name", "Date", "Oil (BBLS)","Gas (MCF)", "Water (BBLS)", "TP", "CP", "Comments","DateYAxis","Total Fluid","7DMA"]]
-  
-    df.to_json(f"data\\prod\\{fld.abbr}\\data.json", orient='values', date_format='iso') #updating loc json file
-    dfsum.to_json(f"data\\prod\\{fld.abbr}\\cuml.json", orient='values', date_format='iso')
+    df = df[["Well Name", "Date", "Oil (BBLS)","Gas (MCF)", "Water (BBLS)", "TP", "CP", "Comments","DateYAxis","Total Fluid","7DMA Oil","7DMA Fluid","30DMA Oil"]]
     
-    try:
-        if fld.abbr == "ST": update_pumpInfo(); analyze(pd.read_csv(f'data\\prod\\{fld.abbr}\\data.csv'),'ST')
-    except Exception as e:
-        print(f'Pump/analyze ERROR {e}')
+    #updating loc json file
+    df.to_json(f"data\\prod\\{fld.abbr}\\data.json", orient='values', date_format='iso')
+    dfsum.to_json(f"data\\prod\\{fld.abbr}\\cuml.json", orient='values', date_format='iso')
+
+    df_analyze = analyze(fld.abbr)
+    df_analyze.to_json(f'data/prod/{fld.abbr}/analyze.json', orient='values', date_format='iso')
 
     return
+
+def parse_schedule(df_prod:pd.DataFrame) -> list:
+    #df_prod = df_prod[df_prod['Total Fluid'] != 0].sort_values(by='Datetime',ascending=False).reset_index(drop=True)
+    #df_prod = df_prod.groupby('Well Name').first().drop([col for col in df_prod.columns if col not in ['Well Name', 'Date']],axis=1)
+    #df_prod['Date'] = pd.to_datetime(df_prod['Date'])
+    #df_prod['Days Since Prod'] = (datetime.now() - df_prod['Date']).dt.days - 1
+
+    curr_mnth = datetime.now().strftime("%Y-%m")
+    curr_mnth = '2023-12'
+    df = pd.read_excel(f'C:/Users/plaisancem/OneDrive - CML Exploration/CML/South Texas/{curr_mnth} OnOff Schedule.xlsx').iloc[:,:2]
+    df = df.rename(columns={el:idx for idx,el in enumerate(df.columns)})
+    shutins = df.loc[df[1].str.contains("shut",case=False)][0].tolist()
+    df = df[((df[1].str.contains("on",case=False)) & (df[1].str.contains("off",case=False)))]
+
+    df['On'] = df[1].str.extract(r'(\d+)\s+on',flags=re.IGNORECASE)
+    df['Off'] = df[1].str.extract(r'(\d+)\s+off',flags=re.IGNORECASE)
+    #df = df.rename(columns={0:'Well Name'})
+    #df = pd.merge(df,df_prod,on='Well Name',how='left').drop([1,'Date'],axis=1)
+   
+    return shutins + df[0].tolist()
+    
+def analyze(field) -> pd.DataFrame:
+    df = pd.read_json(f'data/prod/{field}/data.json')
+    cols = ["Well Name", "Date", "Oil (BBLS)","Gas (MCF)", "Water (BBLS)", "TP", "CP", "Comments","Datetime","Total Fluid","7DMA Oil","7DMA Fluid","30DMA Oil"]
+    df = df.rename(columns={idx:el for idx,el in enumerate(cols)})
+    recent_date = df.sort_values('Datetime', ascending=False)['Datetime'].tolist()[0]
+    
+    #df['MA Ratio Oil'] = df['7DMA Oil'] / df['30DMA Oil']
+    df['MA Ratio Oil'] = np.where(df['30DMA Oil'] != 0, df['7DMA Oil'] / df['30DMA Oil'], 1)
+
+    exclude = parse_schedule(df) if field == 'ST' else list()
+    conditions = {
+        'Low MA Oil': (df["MA Ratio Oil"] < .7),
+        'No Fluids': (df['Total Fluid'] == 0) & ~(df['Well Name'].isin(exclude)),
+        'No Oil': (df['Oil (BBLS)'] == 0) & ~(df['Well Name'].isin(exclude)),
+    }
+    
+    mask = ((conditions["Low MA Oil"] | conditions["No Fluids"] | conditions['No Oil']) & ~(df['30DMA Oil'] == 0))
+    df_analysis = df.loc[df['Datetime'] == recent_date].loc[mask]
+    
+    for case,condition in conditions.items():
+        df_analysis[case] = condition
+
+    df_analysis['case'] = df_analysis \
+                    .apply(lambda row: [condition for condition in conditions.keys() if row[condition]], axis=1)
+    
+    return df_analysis.drop(conditions.keys(),axis=1)
 
 def write_formations():
     df_forms_et = pd.read_json('db\\prodET\\formations.json'
@@ -120,45 +171,10 @@ def write_formations():
 def update_pumpInfo():
     df = pd.read_excel("C:\\Users\\plaisancem\\OneDrive - CML Exploration\\CML\\STprod.xlsx")
     df = df.drop([col for col in df.columns if col not in ['Well Name','C','SPM','DH SL','Ideal bfpd','Pump Depth','GFLAP','Inc']],axis=1)
+    df.to_json('data\prod\ST\pumpinfo.json',orient='records',date_format='iso')
     df.to_json('../frontend/data/ST/pumpInfo.json',orient='records',date_format='iso')
+
     return 
-
-def analyze(df,field):
-    schedule = pd.read_excel('C:\\Users\\plaisancem\\OneDrive - CML Exploration\\CML\\South Texas\\2023-12 OnOff Schedule.xlsx')
-    mask = schedule['December Schedule'].str.contains(r'On') & schedule['December Schedule'].str.contains(r'Off')
-    
-    schedule = schedule[mask]
-    schedule = schedule['Well Name'].tolist()
-    df = df.sort_values(['Date', 'Well Name'], ascending = [True , True])
-    df['7DMA'] = df.groupby('Well Name')['Oil (BBLS)'].transform(lambda x: x.rolling(7, 1).mean().round(1))
-    df['30DMA'] = df.groupby('Well Name')['Oil (BBLS)'].transform(lambda x: x.rolling(30, 1).mean().round(1))
-    df['MA Ratio'] = df['7DMA']/df['30DMA']
-    df['MA Ratio'] = df['MA Ratio'].round(2)
-
-    rec_date = df.sort_values('Date', ascending=False)['Date'].tolist()[0]
-
-    unix_2ndrec = time.mktime(datetime.strptime(str(rec_date), "%Y-%m-%d").timetuple()) - 60*60*24
-    datetime_2ndRec = datetime.fromtimestamp(unix_2ndrec).strftime('%Y-%m-%d')
-    print(schedule)
-    mask = ((df['Date'] == datetime_2ndRec) | (df['Date'] == rec_date))
-    df_2nd = df[mask]
-    res = []
-    for _,well in enumerate(schedule[:]):
-        temp = df_2nd[df_2nd['Well Name'] == well]
-        mask = temp['Oil (BBLS)'] == 0
-        if  mask.all(): 
-            res.append(well)
-    
-    schedule = [item for item in schedule if item not in res]
-    dfcsv = df[df['MA Ratio'] < .8]
-    df_analysis = df[
-        ((df['Date'] == rec_date) & (df['30DMA'] > 6) & 
-        (
-            ((df['MA Ratio'] < 0.8) & (df['Oil (BBLS)'] < df['30DMA'] * 0.8)) |
-            (df['Oil (BBLS)'] == 0) & ~df['Well Name'].isin(schedule))
-        ) | (df['Well Name'].isin(res) &(df['Date'] == rec_date) & (df['30DMA'] > 6))
-    ]
-    df_analysis.to_json('data\\prod\\ST\\analyze.json',orient='records')
 
 def move(field):
     paths = {f'data\\prod\\{field}\\cuml.json': f'../frontend/data/{field}/cumlProd{field}.json',
@@ -304,6 +320,7 @@ def lstProd(field,day):#day YYYY-MM-dd
 
 
 if __name__ == '__main__':
+    #update_pumpInfo()
     for abbr,field in {'ST':'SOUTH TEXAS','ET':'EAST TEXAS','GC':'Gulf Coast','WT':'West TX','NM':'New Mexico'}.items():
         prod(field=field,abbr=abbr) 
         move(field=abbr)
