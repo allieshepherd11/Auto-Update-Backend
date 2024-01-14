@@ -1,0 +1,94 @@
+{
+    "Bruce Weaver #2 Re": [
+        {
+            "id": 1975053,
+            "tank": 36583,
+            "reading_id": 25427688,
+            "run_ticket_number": "2939381",
+            "date": 1704607200,
+            "type": "OIL",
+            "total": 190,
+            "dt": "2024-01-07"
+        },
+        {
+            "id": 1974542,
+            "tank": 36583,
+            "reading_id": 25419476,
+            "run_ticket_number": "2942131",
+            "date": 1704520800,
+            "type": "OIL",
+            "total": 190,
+            "dt": "2024-01-06"
+        },
+        {
+            "id": 1974059,
+            "tank": 36583,
+            "reading_id": 25413073,
+            "run_ticket_number": "2939391",
+            "date": 1704434400,
+            "type": "OIL",
+            "total": 188,
+            "dt": "2024-01-05"
+        },
+        {
+            "id": 1974060,
+            "tank": 36583,
+            "reading_id": 25413073,
+            "run_ticket_number": "2939491",
+            "date": 1704434400,
+            "type": "OIL",
+            "total": 190,
+            "dt": "2024-01-05"
+        },
+        {
+            "id": 1974540,
+            "tank": 36584,
+            "reading_id": 25419473,
+            "run_ticket_number": "2942141",
+            "date": 1704520800,
+            "type": "OIL",
+            "total": 180,
+            "dt": "2024-01-06"
+        },
+        {
+            "id": 1974058,
+            "tank": 36584,
+            "reading_id": 25413072,
+            "run_ticket_number": null,
+            "date": 1704434400,
+            "type": "OIL",
+            "total": 20.43,
+            "dt": "2024-01-05"
+        },
+        {
+            "id": 1974541,
+            "tank": 36585,
+            "reading_id": 25419474,
+            "run_ticket_number": null,
+            "date": 1704520800,
+            "type": "OIL",
+            "total": 59.02,
+            "dt": "2024-01-06"
+        },
+        {
+            "id": 1974057,
+            "tank": 36585,
+            "reading_id": 25413071,
+            "run_ticket_number": null,
+            "date": 1704434400,
+            "type": "OIL",
+            "total": 20.43,
+            "dt": "2024-01-05"
+        },
+        {
+            "id": 1973163,
+            "tank": 36585,
+            "reading_id": 25401223,
+            "run_ticket_number": "2932811",
+            "date": 1704348000,
+            "type": "OIL",
+            "total": 192,
+            "dt": "2024-01-04"
+        }
+    ]
+}

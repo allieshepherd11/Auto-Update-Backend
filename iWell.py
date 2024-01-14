@@ -33,6 +33,9 @@ def wells(token):
     data = x.json()['data']
     print(data[0])
 
+def get_wellId(token,field,wellName):
+    return single_well_group(token,well_group(token)['SOUTH TEXAS'])[wellName]
+
 def well_group(token):
     group_dict = {}
     x = requests.get('https://api.iwell.info/v1/well-groups', headers={'Authorization': f'Bearer {token}'})
@@ -114,3 +117,10 @@ def GETwellTanks(token,wellID):
     x = requests.get(f'https://api.iwell.info/v1/wells/{wellID}/tanks', headers={'Authorization': f'Bearer {token}'})
     data = x.json()['data']
     return data
+
+
+if __name__ == '__main__':
+    token = init()
+    groups = well_group(token)
+    st = single_well_group(token,groups['SOUTH TEXAS']) 
+    print(st[''])

@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import time
 import json
 import pandas as pd
+#from Tanks import WellBattery,format_save_loads,callable_loads,save_runtickets
 
 class Field():
     def __init__(self,field,abbr,start) -> None:
@@ -32,11 +33,16 @@ class Field():
         since = datetime.strptime(str(self.start), "%Y-%m-%d").timestamp()
         updates = []
         importData = []
-        print(f'wells {self.wells.items()}')
+        batteries = {}
+        runtickets = pd.DataFrame()
+
         for well,id in self.wells.items():
             if 'Compressor' in well or 'Drip' in well or 'SWD' in well: continue
-
             print(well)
+
+            #batteries[well],well_tickets=WellBattery(well,id,self.token,self.since).handle()
+            batteries[well],well_tickets = self.tank_levels(well,id)
+            runtickets=pd.concat([runtickets,well_tickets])
             prod,comms,tp,cp = self.fetch_data(id,since)
             
             for i in prod[:]:
@@ -95,6 +101,9 @@ class Field():
                 if len(data) == 7: data.append("")
                 importData.append(data)
         
+        if self.abbr == 'ST': 
+            with open(f"data\prod\ST\\batteries.jsonbatteries.json",'w') as f: json.dump(batteries,f)
+
         dfimport = pd.DataFrame(data=importData,columns=["Well Name","Date","Oil (BBLS)","Gas (MCF)","Water (BBLS)","TP","CP","Comments"])
         print(f'dfimport {dfimport}')
         dfimport = dfimport.fillna('')
@@ -102,8 +111,111 @@ class Field():
         dfimport.Date = pd.to_datetime(dfimport.Date)
         dfimport = dfimport.reset_index(drop=True)
 
-        return dfimport,updates
-     
+        return dfimport,updates,batteries
+    
+    def tank_levels(self,well,well_id):
+        battery = self.req_wrapper(f"https://api.iwell.info/v1/wells/{well_id}/tanks")
+        res = []
+        run_tickets = pd.DataFrame()
+
+        for tank in battery:
+            readings = self.req_wrapper(f"https://api.iwell.info/v1/tanks/{tank['id']}/readings?since={self.since}")
+            info = self.req_wrapper(f"https://api.iwell.info/v1/tanks/{tank['id']}")
+           
+            #for reading in reversed(readings):
+            #    run_ticket = self.runtickets(well,tank['id'],reading['id'])
+            #    run_tickets = pd.concat([run_ticket,run_tickets])
+
+            readings.sort(key=lambda x: x["reading_time"])
+            if len(readings) != 0:
+                res.append({
+                    "Id":readings[-1]["id"],
+                    "type": tank['type'],
+                    "name": tank['name'],
+                    "capcity": info['capacity'],
+                    "factor": info['multiplier'],
+                    "reading_time":readings[-1]["reading_time"],
+                    "top_feet":readings[-1]["top_feet"],
+                    "top_inches":readings[-1]["top_inches"],
+                    "updated_at":readings[-1]["updated_at"],
+                })
+
+        return res,run_tickets
+
+    def runtickets(self,well,tank_id,reading_id): 
+        data = self.req_wrapper(f'https://api.iwell.info/v1/tanks/{tank_id}/readings/{reading_id}/run-tickets?since={self.since}')
+        
+        df = {'well':[],'id':[],'run_ticket_number':[],'date':[],'date_string':[],'updated_at':[],'type':[],'total':[]}
+        if len(data) > 0:
+            for ticket in data:
+                df['well'].append(well)
+                df['date_string'].append(datetime.utcfromtimestamp(ticket['date']).strftime("%Y-%m-%d %H:%M:%S"))
+                for key in ticket:
+                    if key in ['id','run_ticket_number','date','type','total','updated_at']:
+                        df[key].append(ticket[key])
+                    #r['tank'] = tank_id
+                    #r['reading_id'] = reading_id
+                        
+        return pd.DataFrame(df)
+
+    def equalized(self):
+        with open("data\prod\ST/batteries.json","r") as f: data=json.load(f)
+        equalized = {}
+        for well,tanks in data.items():
+            print(well)
+            equalized[well] = []
+            oil={}
+            for tank in tanks:
+                if tank['type'] == 'WATER': continue
+
+                bo = (tank['top_feet']*12 + tank['top_inches'])*tank['factor']
+                if bo not in oil: oil[bo] = [tank['Id']]
+                else: oil[bo].append(tank['Id'])
+            for amt,ids in oil.items():
+                if len(ids) > 1:
+                    equalized[well].append([i for i in ids])
+        with open("equalized.json","w") as f: json.dump(equalized,f)
+        
+        return
+
+    def callable_load(self):
+        with open("data\prod\ST/equalized.json","r") as f: equalized=json.load(f)
+        with open("data\prod\ST/batteries.json","r") as f: data=json.load(f)
+        load = {'OIL': 190,'WATER':120,'OIL/WATER':120}
+        
+        res = {}
+        for well,tanks in data.items():
+            print(well)
+            equal_tanks = equalized[well]
+
+            loads = {}
+            for tank in tanks:
+                loads[tank['Id']] = []
+                amt = load[tank['type']]
+                bbls = (tank['top_feet']*12 + tank['top_inches'])*tank['factor']
+                
+                for _ in range(int(bbls // amt)):
+                    loads[tank['Id']].append({
+                        'tank_id':tank['Id'],
+                        'dt':tank['updated_at'],
+                        'type':tank['type'],
+                        'bbls':amt,
+                    })
+            res[well] = loads
+        with open('data/prod/ST/loads.json','w') as f: json.dump(res,f)
+        return
+
+    def save_runtickets(self,imports):
+        df = pd.concat([pd.read_csv('data/prod/ST/runtickets.csv'),imports])
+        df['updated_at'] = pd.to_datetime(df['updated_at'])
+
+        df = df.sort_values(by=['id', 'updated_at'], ascending=[True, False])
+        df = df.drop_duplicates(subset='id', keep='first').reset_index(drop=True)
+        df = df.sort_values(['well', 'date'], ascending = [True , False]).reset_index(drop=True)
+        print("DF",df)
+        df.to_csv('runticketsCurr.csv',index=False)
+        return
+
     def fetch_data(self,id,since):
         prod,comms,tp,cp = None,None,None,None
                 
@@ -117,6 +229,15 @@ class Field():
             time.sleep(10);print('trying again..\n')
             return self.fetch_data(id,since)
         return prod,comms,tp,cp
+    
+    def req_wrapper(self,url):
+        try: 
+            x = requests.get(url,headers={'Authorization': f'Bearer {self.token}'})
+        except requests.exceptions.ConnectionError:
+            print('connection error')
+            time.sleep(10);print('trying again..\n')
+            return self.req_wrapper(url) 
+        return x.json()['data']
     
     def access(self):
         load_dotenv()
@@ -233,6 +354,23 @@ class Field():
     def handleCall(self):
         self.calls += 1
         if self.calls >= 295: self.calls = 0; print('sleep'); time.sleep(60)
+    
+    def format_save_loads(self):
+        with open("data\prod\ST\loads.json","r") as f: data=json.load(f)
+        loads_display = []
+        for well,tanks in data.items():
+            for _,tank in tanks.items():
+                for load in tank:
+                    print(tank)
+                    loads_display.append([
+                        well,
+                        load['tank_id'],
+                        load['type'],
+                        load['bbls'],
+                        datetime.fromtimestamp(load['dt']).strftime('%m-%d-%y %H:%M:%S'),
+                    ])
+        with open('../frontend\data\ST/loads.json','w') as f: json.dump(loads_display,f)
+
 
 class Allocations():
     def __init__(self,token,well_id,prod,comms,alct_path,since,imprtDays) -> None:
@@ -415,17 +553,19 @@ class Allocations():
                 try: 
                     for ty in typs: alct_main[self.well_id]['tests'][date[:7]][str(self.twell[date])][ty].append(self.tprod[date][ty])
                 except KeyError: 
+                    alct_main[self.well_id]['tests'][date[:7]] = {}
                     for ty in typs: alct_main[self.well_id]['tests'][date[:7]][int(self.twell[date])][ty].append(self.tprod[date][ty])
                 with open('data\prod\\NM\\allocations.json','w') as f: json.dump(alct_main,f)
         return res
 
 if __name__ == '__main__':
-    #df = pd.read_csv('data\prod\GC\data.csv')11441
-    start = '2023-07-26'
-    fld = Field('New Mexico','NM',start)
+    start = '2024-01-07'
+    fld = Field('SOUTH TEXAS','ST',start)
+    fld.importData()
+    exit()
     dfimport,updates = fld.importData()
 
-    exit()
+
     
 
 

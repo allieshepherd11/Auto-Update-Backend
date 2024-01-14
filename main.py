@@ -18,13 +18,16 @@ def prod(field,abbr,importProd=True):
     start = str(df.iloc[0]['Date'])[:10] # Gets the most recent date from the dataframe
     ##Import recent data from iwell
     fld = Field(field,abbr,start)
+    
     ##
     if importProd:
-        dfImport,updates = fld.importData()
+        dfImport,updates,tank_levels = fld.importData()
         for i in updates:
             mask = (df['Well Name'] == i["Well Name"]) & (df['Date'] == i["date"])
             df.loc[mask, ['Oil (BBLS)', 'Gas (MCF)', 'Water (BBLS)']] = i["oil"], i["gas"], i["water"]
         df = pd.concat([df,dfImport]).drop_duplicates()
+        with open(f"data/prod/{abbr}/batteries.json",'w') as f: json.dump(tank_levels,f)
+
     df['Oil (BBLS)'] = pd.to_numeric(df['Oil (BBLS)'], errors='coerce')
 
     df['Oil (BBLS)'] = pd.to_numeric(df['Oil (BBLS)'])
@@ -42,7 +45,6 @@ def prod(field,abbr,importProd=True):
     if fld.abbr == 'ST': recYrProd(df,fld.abbr)
     if fld.abbr == 'WT': df = handleWT(df)
     title = f'{fld.field} Total' if fld.field != 'West TX' else 'West Texas Total'
-    
 
     title = title.title()
     
@@ -106,10 +108,14 @@ def prod(field,abbr,importProd=True):
     df.to_json(f"data\\prod\\{fld.abbr}\\data.json", orient='values', date_format='iso')
     dfsum.to_json(f"data\\prod\\{fld.abbr}\\cuml.json", orient='values', date_format='iso')
 
-    df_analyze = analyze(fld.abbr)
-    df_analyze.to_json(f'data/prod/{fld.abbr}/analyze.json', orient='values', date_format='iso')
-
+    try:
+        update_pumpInfo()
+        df_analyze = analyze(fld.abbr)
+        df_analyze.to_json(f'data/prod/{fld.abbr}/analyze.json', orient='values', date_format='iso')
+    except Exception as err:
+        print(f'ANALYZE ERROR {err}')
     return
+
 
 def parse_schedule(df_prod:pd.DataFrame) -> list:
     #df_prod = df_prod[df_prod['Total Fluid'] != 0].sort_values(by='Datetime',ascending=False).reset_index(drop=True)
@@ -129,14 +135,13 @@ def parse_schedule(df_prod:pd.DataFrame) -> list:
     #df = df.rename(columns={0:'Well Name'})
     #df = pd.merge(df,df_prod,on='Well Name',how='left').drop([1,'Date'],axis=1)
    
-    return shutins + df[0].tolist()
+    return shutins,df[0].tolist()
     
 def analyze(field) -> pd.DataFrame:
     df = pd.read_json(f'data/prod/{field}/data.json')
     cols = ["Well Name", "Date", "Oil (BBLS)","Gas (MCF)", "Water (BBLS)", "TP", "CP", "Comments","Datetime","Total Fluid","7DMA Oil","7DMA Fluid","30DMA Oil"]
     df = df.rename(columns={idx:el for idx,el in enumerate(cols)})
-    recent_date = df.sort_values('Datetime', ascending=False)['Datetime'].tolist()[0]
-    
+    past_two_days = df.sort_values('Datetime', ascending=False)['Datetime'].tolist()[0]
     #df['MA Ratio Oil'] = df['7DMA Oil'] / df['30DMA Oil']
     df['MA Ratio Oil'] = np.where(df['30DMA Oil'] != 0, df['7DMA Oil'] / df['30DMA Oil'], 1)
 
@@ -148,8 +153,8 @@ def analyze(field) -> pd.DataFrame:
     }
     
     mask = ((conditions["Low MA Oil"] | conditions["No Fluids"] | conditions['No Oil']) & ~(df['30DMA Oil'] == 0))
-    df_analysis = df.loc[df['Datetime'] == recent_date].loc[mask]
-    
+    df_analysis = df.loc[df['Datetime'] == past_two_days].loc[mask].reset_index(drop=True)
+
     for case,condition in conditions.items():
         df_analysis[case] = condition
 
@@ -174,7 +179,7 @@ def update_pumpInfo():
     df.to_json('data\prod\ST\pumpinfo.json',orient='records',date_format='iso')
     df.to_json('../frontend/data/ST/pumpInfo.json',orient='records',date_format='iso')
 
-    return 
+    return df
 
 def move(field):
     paths = {f'data\\prod\\{field}\\cuml.json': f'../frontend/data/{field}/cumlProd{field}.json',
@@ -320,7 +325,6 @@ def lstProd(field,day):#day YYYY-MM-dd
 
 
 if __name__ == '__main__':
-    #update_pumpInfo()
     for abbr,field in {'ST':'SOUTH TEXAS','ET':'EAST TEXAS','GC':'Gulf Coast','WT':'West TX','NM':'New Mexico'}.items():
         prod(field=field,abbr=abbr) 
         move(field=abbr)
