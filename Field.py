@@ -42,7 +42,7 @@ class Field():
 
             #batteries[well],well_tickets=WellBattery(well,id,self.token,self.since).handle()
             batteries[well],well_tickets = self.tank_levels(well,id)
-            runtickets=pd.concat([runtickets,well_tickets])
+            #runtickets=pd.concat([runtickets,well_tickets])
             prod,comms,tp,cp = self.fetch_data(id,since)
             
             for i in prod[:]:
@@ -54,8 +54,8 @@ class Field():
             for i in prod[:]:# copy of list
                 if i["date"] == str(datetime.today().date()) or i["date"] == str(self.start) or time.mktime(datetime.strptime(i["date"], "%Y-%m-%d").timetuple()) < since: prod.remove(i)
             if prod == []:#needs fix
-                importData.append([well,'2023-08-10',0,0,0,"","","No data"])
                 continue
+            
             #check if shared battery
             alct_path = f'data\prod\\{self.abbr}\\allocations.json'
             try: alct = pd.read_json(alct_path).to_dict()
@@ -102,7 +102,7 @@ class Field():
                 importData.append(data)
         
         if self.abbr == 'ST': 
-            with open(f"data\prod\ST\\batteries.jsonbatteries.json",'w') as f: json.dump(batteries,f)
+            with open(f"data\prod\ST\\batteries.json",'w') as f: json.dump(batteries,f)
 
         dfimport = pd.DataFrame(data=importData,columns=["Well Name","Date","Oil (BBLS)","Gas (MCF)","Water (BBLS)","TP","CP","Comments"])
         print(f'dfimport {dfimport}')
@@ -228,6 +228,10 @@ class Field():
             print('connection error')
             time.sleep(10);print('trying again..\n')
             return self.fetch_data(id,since)
+        except requests.exceptions.ReadTimeout as e:
+            print('readtimeout')
+            time.sleep(10);print('trying again..\n')
+            return self.fetch_data(id,since)
         return prod,comms,tp,cp
     
     def req_wrapper(self,url):
@@ -235,6 +239,10 @@ class Field():
             x = requests.get(url,headers={'Authorization': f'Bearer {self.token}'})
         except requests.exceptions.ConnectionError:
             print('connection error')
+            time.sleep(10);print('trying again..\n')
+            return self.req_wrapper(url) 
+        except requests.exceptions.ReadTimeout:
+            print('readtimeout')
             time.sleep(10);print('trying again..\n')
             return self.req_wrapper(url) 
         return x.json()['data']

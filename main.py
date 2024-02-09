@@ -7,9 +7,11 @@ from Field import Field
 import webbrowser
 import numpy as np
 import re
+from Tanks import run
+
 
 def prod(field,abbr,importProd=True):
-    print(f'field {field}')
+    print(field)
     dtype = {'Oil (BBLS)': float, 'Water (BBLS)': float, 'Gas (MCF)': float, 'TP': str, 'CP': str, 'Comments': str}
     df = pd.read_csv(f'data\\prod\\{abbr}\\data.csv', dtype=dtype)
     df = df.fillna('')
@@ -35,14 +37,14 @@ def prod(field,abbr,importProd=True):
     df.reset_index(drop=True, inplace=True)
     df['Water (BBLS)'].replace('',0, inplace=True)
     df['Gas (MCF)'].replace('',0, inplace=True)
-    df['Oil (BBLS)'] = df['Oil (BBLS)'].clip(lower=0).round(1)
+    df['Oil (BBLS)'] = df['Oil (BBLS)'].clip(lower=0).round()
     df['Water (BBLS)'] = df['Water (BBLS)'].clip(lower=0).round()
     df['Gas (MCF)'] = df['Gas (MCF)'].clip(lower=0).round()
     
     #fld specific tasks
     if fld.abbr == 'GC': df = handleGC(df)
     if fld.abbr == 'NM': df = handleNM(df)
-    if fld.abbr == 'ST': recYrProd(df,fld.abbr)
+    if fld.abbr == 'ST': recYrProd(df,fld.abbr);run()
     if fld.abbr == 'WT': df = handleWT(df)
     title = f'{fld.field} Total' if fld.field != 'West TX' else 'West Texas Total'
 
@@ -50,20 +52,14 @@ def prod(field,abbr,importProd=True):
     
     df = df[df['Well Name'] != title]
     df['Well Name'] = df['Well Name'].str.title()
-    wnMap = {'Cr #101': 'CR #101','Cr #201': 'CR #201','Cr #301': 'CR #301',
-             'Cr #302': 'CR #302','Cr #401': 'CR #401','Cr #501': 'CR #501',
-             'Cr #939': 'CR #939','Jj #1': 'JJ #1','Ct #1': 'CT #1','Jic #1': 'JIC #1',
-             'Jic Buda #1': 'JIC Buda #1','Lt #1': 'LT #1','Mdb #1': 'MDB #1','Pc #1': 'PC #1',
-             'Rab #1': 'RAB #1','Rab #2': 'RAB #2','Rab #3': 'RAB #3','Bmmp #1': 'BMMP #1',
-             'Bruce Weaver #2 Re': 'Bruce Weaver #2 RE','Vre Minerals #1':'VRE Minerals #1',
-             'Dial #1 St': 'Dial #1 ST', 'Ra #1': 'RA #1','Ck #1': 'CK #1', 'Clary Rb #1': 'Clary RB #1',
-             'Mcduffie Unit #1': 'McDuffie Unit #1', 'Mt Unit #1H': 'MT Unit #1H', 'Ws #1': 'WS #1',
-             'Ee 12 #1': 'EE 12 #1','Jm Moore': 'JM Moore','Cl Moore 12': 'CL Moore 12','Ab Pad 10 St. #1': 'AB Pad 10 State #1',
-             'Cw 14 State #1': 'CW 14 State #1','Blair Txl #1': 'Blair TXL #1','Blair Txl #2': 'Blair TXL #2',
-             'Blair Txl #3': 'Blair TXL #3','Llb 15 #1': 'LLB 15 #1','South Juwf': 'South JUWF', 'North Juwf':'North JUWF',
-             'Triple A Federal #3': 'Triple A Fed #3','Cmww #1':'CMWW #1','Cmww #2':'CMWW #2','La Rosita #1 Re':'La Rosita #1 RE'}
-    
+    try:
+        with open("data/misc/excludeWells.json",'r') as f: excludeWells = json.load(f)[abbr]
+        df=df.loc[~df['Well Name'].isin(excludeWells)].reset_index(drop=True)
+    except KeyError:pass
+
+    with open("data/misc/wnMap.json",'r') as f: wnMap = json.load(f)
     for k,v in wnMap.items(): df.loc[df['Well Name'] == k,'Well Name'] = v
+
     df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
     df.to_csv(f'data\\prod\\{fld.abbr}\\data.csv', index=False)
     if fld.abbr == 'ET': df.to_csv('data\\prod\\WB\\data.csv', index=False)
@@ -116,16 +112,15 @@ def prod(field,abbr,importProd=True):
         print(f'ANALYZE ERROR {err}')
     return
 
-
-def parse_schedule(df_prod:pd.DataFrame) -> list:
+def parse_schedule(df_prod:pd.DataFrame) -> pd.DataFrame:
     #df_prod = df_prod[df_prod['Total Fluid'] != 0].sort_values(by='Datetime',ascending=False).reset_index(drop=True)
     #df_prod = df_prod.groupby('Well Name').first().drop([col for col in df_prod.columns if col not in ['Well Name', 'Date']],axis=1)
     #df_prod['Date'] = pd.to_datetime(df_prod['Date'])
     #df_prod['Days Since Prod'] = (datetime.now() - df_prod['Date']).dt.days - 1
 
     curr_mnth = datetime.now().strftime("%Y-%m")
-    curr_mnth = '2023-12'
-    df = pd.read_excel(f'C:/Users/plaisancem/OneDrive - CML Exploration/CML/South Texas/{curr_mnth} OnOff Schedule.xlsx').iloc[:,:2]
+    curr_mnth = '2024-01'
+    df = pd.read_excel(f'C:/Users/plaisancem/CML Exploration/Travis Wadman - CML/South Texas/{curr_mnth} OnOff Schedule.xlsx').iloc[:,:2]
     df = df.rename(columns={el:idx for idx,el in enumerate(df.columns)})
     shutins = df.loc[df[1].str.contains("shut",case=False)][0].tolist()
     df = df[((df[1].str.contains("on",case=False)) & (df[1].str.contains("off",case=False)))]
@@ -134,34 +129,53 @@ def parse_schedule(df_prod:pd.DataFrame) -> list:
     df['Off'] = df[1].str.extract(r'(\d+)\s+off',flags=re.IGNORECASE)
     #df = df.rename(columns={0:'Well Name'})
     #df = pd.merge(df,df_prod,on='Well Name',how='left').drop([1,'Date'],axis=1)
-   
-    return shutins,df[0].tolist()
+    return df
     
 def analyze(field) -> pd.DataFrame:
     df = pd.read_json(f'data/prod/{field}/data.json')
     cols = ["Well Name", "Date", "Oil (BBLS)","Gas (MCF)", "Water (BBLS)", "TP", "CP", "Comments","Datetime","Total Fluid","7DMA Oil","7DMA Fluid","30DMA Oil"]
     df = df.rename(columns={idx:el for idx,el in enumerate(cols)})
-    past_two_days = df.sort_values('Datetime', ascending=False)['Datetime'].tolist()[0]
+    past_days = df.sort_values('Datetime', ascending=False)['Datetime'].tolist()
     #df['MA Ratio Oil'] = df['7DMA Oil'] / df['30DMA Oil']
     df['MA Ratio Oil'] = np.where(df['30DMA Oil'] != 0, df['7DMA Oil'] / df['30DMA Oil'], 1)
 
-    exclude = parse_schedule(df) if field == 'ST' else list()
+    scheduled = parse_schedule(df) if field == 'ST' else list()
+    print(scheduled)
     conditions = {
         'Low MA Oil': (df["MA Ratio Oil"] < .7),
-        'No Fluids': (df['Total Fluid'] == 0) & ~(df['Well Name'].isin(exclude)),
-        'No Oil': (df['Oil (BBLS)'] == 0) & ~(df['Well Name'].isin(exclude)),
+        'No Fluids': (df['Total Fluid'] == 0),
+        'No Oil': (df['Oil (BBLS)'] == 0),
     }
     
     mask = ((conditions["Low MA Oil"] | conditions["No Fluids"] | conditions['No Oil']) & ~(df['30DMA Oil'] == 0))
-    df_analysis = df.loc[df['Datetime'] == past_two_days].loc[mask].reset_index(drop=True)
+    df_analysis = df.loc[df['Datetime'] == past_days[0]].loc[mask].reset_index(drop=True)
 
-    for case,condition in conditions.items():
-        df_analysis[case] = condition
+
+    #add case names        
+    df_analysis['Low MA Oil'] = (df_analysis["MA Ratio Oil"] < .7)
+    df_analysis['No Fluids'] = (df_analysis['Total Fluid'] == 0)
+    df_analysis['No Oil'] = (df_analysis['Oil (BBLS)'] == 0)
 
     df_analysis['case'] = df_analysis \
                     .apply(lambda row: [condition for condition in conditions.keys() if row[condition]], axis=1)
     
-    return df_analysis.drop(conditions.keys(),axis=1)
+    #remove scheduled if 
+    for idx,row in scheduled.iterrows(): 
+        row_match = df_analysis.loc[df_analysis['Well Name'] == row[0]]
+        if not row_match.empty:
+            df_well = df.loc[df['Well Name'] == row[0]]
+
+            days=0
+            for tf in df_well['Total Fluid'].tolist():
+                if tf != 0: break
+                else: days+=1
+            
+            if days <= int(row['Off']) and row_match['No Fluids'].tolist()[0]:
+                print(row_match['Well Name'].to_list()[0])
+                df_analysis=df_analysis.drop(row_match.index)
+                
+    
+    return df_analysis.drop(conditions.keys(),axis=1).reset_index(drop=True)
 
 def write_formations():
     df_forms_et = pd.read_json('db\\prodET\\formations.json'
@@ -174,7 +188,9 @@ def write_formations():
         json.dump(dd,f)
 
 def update_pumpInfo():
-    df = pd.read_excel("C:\\Users\\plaisancem\\OneDrive - CML Exploration\\CML\\STprod.xlsx")
+    #df = pd.read_excel("C:\\Users\\plaisancem\\OneDrive - CML Exploration\\CML\\STprod.xlsx")
+    df = pd.read_excel("C:\\Users\\plaisancem\\CML Exploration\\Travis Wadman - CML\\STprod.xlsx")
+
     df = df.drop([col for col in df.columns if col not in ['Well Name','C','SPM','DH SL','Ideal bfpd','Pump Depth','GFLAP','Inc']],axis=1)
     df.to_json('data\prod\ST\pumpinfo.json',orient='records',date_format='iso')
     df.to_json('../frontend/data/ST/pumpInfo.json',orient='records',date_format='iso')

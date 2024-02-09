@@ -205,6 +205,10 @@ def figure_equalized_tanks():
         with open(f"data\prod\ST/equalized.json","w") as f: json.dump(equalized,f)
         return equalized
 
+def run():
+    callable_loads()
+    fs_batteriesFE()
+    
 if __name__ == '__main__':
     callable_loads()
     fs_batteriesFE()

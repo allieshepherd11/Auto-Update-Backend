@@ -32,7 +32,7 @@ def cumlDL() -> pd.DataFrame:
     import os
     import pandas as pd
 
-    path = 'C:\\Users\\plaisancem\\Documents\\well_files'
+    path = 'C:\\Users\\plaisancem\\Documents\\Well Files'
 
     stpoints = {
         'RAB #2':{'OH':7577,'ST01':7694,'ST02':9296,'ST03':9375},
@@ -50,7 +50,11 @@ def cumlDL() -> pd.DataFrame:
         'Dial #1 ST':{'OH':6166,'ST01':5287,'ST02':5882},
         'Lamb #1':{'OH':7614,'ST01':12422,'ST05':9312},
         'CMWW #1':{'OH':6827,'ST01':6796},
-        'CMWW #2':{'OH':7205,'ST01':5883,'ST02':5539}
+        'CMWW #2':{'OH':7205,'ST01':5883,'ST02':5539},
+        'La Rosita RE #1': {'OH':8142,'ST01':6226,'ST02':6729,'ST03':6070,'ST04':5566,'ST05':6070,'ST06':8520},
+        'Pfeiffer Byrd #1': {'OH':6295,'ST01':8937,'ST02':12042,'ST03':9689,'ST04':5917,'ST05':7895},
+        'Dixondale #1': {'OH':6336,'ST01':11775,'ST02':6398,'ST03':6900,'ST04':6430,'ST05':6399},
+
     }
     res = {'Well':[],'OH':[],'ST01':[],'ST02':[],'ST03':[],'ST04':[],'ST05':[]}
 
@@ -82,3 +86,6 @@ def cumlDL() -> pd.DataFrame:
         sts = ['Well']
     
     return pd.DataFrame(res)
+
+cdl = cumlDL()
+print(cdl)
