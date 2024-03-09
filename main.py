@@ -119,7 +119,7 @@ def parse_schedule(df_prod:pd.DataFrame) -> pd.DataFrame:
     #df_prod['Days Since Prod'] = (datetime.now() - df_prod['Date']).dt.days - 1
 
     curr_mnth = datetime.now().strftime("%Y-%m")
-    curr_mnth = '2024-01'
+    #curr_mnth = '2024-01'
     df = pd.read_excel(f'C:/Users/plaisancem/CML Exploration/Travis Wadman - CML/South Texas/{curr_mnth} OnOff Schedule.xlsx').iloc[:,:2]
     df = df.rename(columns={el:idx for idx,el in enumerate(df.columns)})
     shutins = df.loc[df[1].str.contains("shut",case=False)][0].tolist()

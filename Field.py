@@ -40,8 +40,7 @@ class Field():
             if 'Compressor' in well or 'Drip' in well or 'SWD' in well: continue
             print(well)
 
-            #batteries[well],well_tickets=WellBattery(well,id,self.token,self.since).handle()
-            batteries[well],well_tickets = self.tank_levels(well,id)
+            if self.abbr == 'ST': batteries[well],well_tickets = self.tank_levels(well,id)
             #runtickets=pd.concat([runtickets,well_tickets])
             prod,comms,tp,cp = self.fetch_data(id,since)
             
@@ -301,7 +300,7 @@ class Field():
         x = requests.get(f'https://api.iwell.info/v1/wells/{well_id}/fields/{field_id}/values?since={time_since}', headers={'Authorization': f'Bearer {self.token}'})
         self.handleCall()
         field_value = []
-
+        #print(x.content)
         data = x.json()['data']
         for i in data:
             field_value.append(i)
@@ -567,8 +566,8 @@ class Allocations():
         return res
 
 if __name__ == '__main__':
-    start = '2024-01-07'
-    fld = Field('SOUTH TEXAS','ST',start)
+    start = '2024-02-25'
+    fld = Field('NEW MEXICO','NM',start)
     fld.importData()
     exit()
     dfimport,updates = fld.importData()

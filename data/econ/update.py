@@ -2,7 +2,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 def payouts():
-    excel_file = pd.ExcelFile('data\econ\payoutsFeb24.xlsx')
+    excel_file = pd.ExcelFile('data\econ\\2024-03 Payouts.xlsx')
 
     sheet_names = excel_file.sheet_names
     dfs = []
@@ -17,13 +17,13 @@ def payouts():
         .sort_values(['Well Name'], ascending = [True]).reset_index(drop=True)
     df = df[df['Well Name'] != 'Well Name']
     df.loc[df['Well Name'] == 'Margurite #1','Well Name'] = "Marguerite #1"
-    df.to_json("C:\\Users\\plaisancem\\Documents\\dev\\Apps\\Prod\\frontend\\data\\econ\\payouts1.json", orient='records')
+    df.to_json("C:\\Users\\plaisancem\\Documents\\dev\\Apps\\Prod\\frontend\\data\\econ\\payouts.json", orient='records')
 
 def economics():
-    df = pd.read_excel("data\econ/pl.xlsx")
+    df = pd.read_excel("data\econ\\2024 PL'S By Well South Texas Only - Copy.xlsx")
 
     df.columns = df.iloc[0].reset_index(drop=True)
-    rec_mnth = 'Nov 2023'
+    rec_mnth = 'Jan 2024'
 
     rec_mnth_dt = (datetime.strptime(rec_mnth, '%b %Y').replace(day=1) + timedelta(days=32))\
                         .replace(day=1) - timedelta(days=1)
@@ -39,9 +39,8 @@ def economics():
     df.loc[df['Well Name'] == 'La Rosita #1','Well Name'] = "La Rosita #1 Re"
 
 
-    df.to_json('C:\\Users\\plaisancem\\Documents\\dev\\Apps\\Prod\\frontend\\data\\econ\\economicsNov.json',orient='records')
+    df.to_json('C:\\Users\\plaisancem\\Documents\\dev\\Apps\\Prod\\frontend\\data\\econ\\economics.json',orient='records')
 
 
-#payouts()
-#exit()
+payouts()
 economics()
