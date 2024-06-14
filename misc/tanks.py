@@ -3,7 +3,7 @@ import requests
 from dotenv import load_dotenv
 import datetime
 import os 
-from iWell import init, me, GET_tank_reading, GET_run_ticket, POST_tank_reading
+from src.Modules.iWell import init, me, GET_tank_reading, GET_run_ticket, POST_tank_reading
 import plotly.graph_objects as go
 import time
 import json

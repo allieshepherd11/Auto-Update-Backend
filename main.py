@@ -2,33 +2,44 @@ import pandas as pd
 from datetime import datetime
 import time
 import json
-from Report import ProdReport
-from Field import Field
+from src.Modules.Report import ProdReport
+from src.Modules.Field import Field
 import webbrowser
 import numpy as np
 import re
-from Tanks import run
+import src.Modules.Tanks as Tanks
 
 
-def prod(field,abbr,importProd=True):
+def updateApp(field,importProd=True):
     print(field)
+    abbr = ''.join([w[0] for w in field.split(' ')]).upper()
     dtype = {'Oil (BBLS)': float, 'Water (BBLS)': float, 'Gas (MCF)': float, 'TP': str, 'CP': str, 'Comments': str}
-    df = pd.read_csv(f'data\\prod\\{abbr}\\data.csv', dtype=dtype)
-    df = df.fillna('')
+    df = pd.read_csv(f'data/prod/{abbr}/data.csv', dtype=dtype,na_values=[''])
     df.Date = pd.to_datetime(df.Date)
     df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
     start = str(df.iloc[0]['Date'])[:10] # Gets the most recent date from the dataframe
-    ##Import recent data from iwell
-    fld = Field(field,abbr,start)
     
+    ##Import recent data from iwell
     ##
     if importProd:
-        dfImport,updates,tank_levels = fld.importData()
+        fld = Field(field,abbr,start)
+        dfImport,updates,tank_levels,dfGasImport = fld.importData()
+        with open(f"data/prod/{abbr}/batteries.json",'w') as f: json.dump(tank_levels,f)
         for i in updates:
             mask = (df['Well Name'] == i["Well Name"]) & (df['Date'] == i["date"])
             df.loc[mask, ['Oil (BBLS)', 'Gas (MCF)', 'Water (BBLS)']] = i["oil"], i["gas"], i["water"]
         df = pd.concat([df,dfImport]).drop_duplicates()
-        with open(f"data/prod/{abbr}/batteries.json",'w') as f: json.dump(tank_levels,f)
+
+        if len(dfGasImport) > 0:
+            dfGasImport = dfGasImport.sort_values(['Date', 'Well Name'], ascending = [False , True])
+            dfGasImport['Date'] = pd.to_datetime(dfGasImport['Date'])
+            
+            df = pd.merge(df, dfGasImport, on=['Date', 'Well Name'], how='left', suffixes=('', '_y'))
+            df['Sales Pressure'] = df['Sales Pressure'].combine_first(df['Sales Pressure_y'])
+            df['Flow Rate Sales'] = df['Flow Rate Sales'].combine_first(df['Flow Rate Sales_y'])
+            df['Flow Rate Flare'] = df['Flow Rate Flare'].combine_first(df['Flow Rate Flare_y'])
+            df.drop(['Flow Rate Sales_y', 'Flow Rate Flare_y','Sales Pressure_y'], axis=1, inplace=True)
+            df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
 
     df['Oil (BBLS)'] = pd.to_numeric(df['Oil (BBLS)'], errors='coerce')
 
@@ -42,11 +53,11 @@ def prod(field,abbr,importProd=True):
     df['Gas (MCF)'] = df['Gas (MCF)'].clip(lower=0).round()
     
     #fld specific tasks
-    if fld.abbr == 'GC': df = handleGC(df)
-    if fld.abbr == 'NM': df = handleNM(df)
-    if fld.abbr == 'ST': recYrProd(df,fld.abbr);run()
-    if fld.abbr == 'WT': df = handleWT(df)
-    title = f'{fld.field} Total' if fld.field != 'West TX' else 'West Texas Total'
+    if abbr == 'GC': df = handleGC(df)
+    if abbr == 'NM': df = handleNM(df)
+    if abbr == 'ST': recYrProd(df,abbr)
+    if abbr == 'WT': df = handleWT(df)
+    title = f'{field} Total' if field != 'West TX' else 'West Texas Total'
 
     title = title.title()
     
@@ -61,8 +72,8 @@ def prod(field,abbr,importProd=True):
     for k,v in wnMap.items(): df.loc[df['Well Name'] == k,'Well Name'] = v
 
     df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
-    df.to_csv(f'data\\prod\\{fld.abbr}\\data.csv', index=False)
-    if fld.abbr == 'ET': df.to_csv('data\\prod\\WB\\data.csv', index=False)
+    df.to_csv(f'data/prod/{abbr}/data.csv', index=False)
+    if abbr == 'ET': df.to_csv('data/prod/WB/data.csv', index=False)
     df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
     dfoil = df.groupby(['Well Name'])['Oil (BBLS)'].sum().divide(1000).astype(float).reset_index().round(1)
     dfwater = df.groupby(['Well Name'])['Water (BBLS)'].sum().divide(1000).astype(float).reset_index().round(1)
@@ -71,7 +82,7 @@ def prod(field,abbr,importProd=True):
 
     dfsum = dfoil.merge(dfwater, on='Well Name').merge(dfgas, on='Well Name')
     dfsum.loc[len(dfsum)] = dfsum[['Oil (BBLS)','Water (BBLS)','Gas (MCF)']].sum()
-    dfsum.loc[len(dfsum)-1,'Well Name'] = f'{fld.abbr} Total'
+    dfsum.loc[len(dfsum)-1,'Well Name'] = f'{abbr} Total'
 
     # Create entries for total field production in a way that can integrate with graph
     dfoiltotal = df.groupby(['Date'])['Oil (BBLS)'].sum().astype(int).reset_index()
@@ -89,7 +100,7 @@ def prod(field,abbr,importProd=True):
     df['7DMA Fluid'] = df.groupby('Well Name')['Total Fluid'].rolling(window=7).mean().reset_index(level=0, drop=True)
     df['30DMA Oil'] = df.groupby('Well Name')['Oil (BBLS)'].rolling(window=30).mean().reset_index(level=0, drop=True)
     df = df.sort_values(['Date', 'Well Name'], ascending = [False , True]).reset_index(drop=True)
-
+    
     # ADD DATE COLUMN FOR X AXIS USE (DateYAxis) & CHANGING DATATYPE TO Object
     df['DateYAxis'] =  df['Date']
     df['DateYAxis'] =  pd.to_datetime(df['Date'])
@@ -98,18 +109,27 @@ def prod(field,abbr,importProd=True):
     df['Date'] =  pd.to_datetime(df['Date'])
     df['Date'] = df['Date'].dt.strftime('%B %d, %Y')
     
-    df = df[["Well Name", "Date", "Oil (BBLS)","Gas (MCF)", "Water (BBLS)", "TP", "CP", "Comments","DateYAxis","Total Fluid","7DMA Oil","7DMA Fluid","30DMA Oil"]]
+    colsOrder = ["Well Name", "Date", "Oil (BBLS)","Gas (MCF)", "Water (BBLS)", "TP", "CP", "Comments",
+                 "DateYAxis","Total Fluid","7DMA Oil","7DMA Fluid","30DMA Oil"]
+    if abbr == 'ST':
+        colsOrder.extend(["Sales Pressure","Flow Rate Sales","Flow Rate Flare"])
+
+    df = df[colsOrder]
     
     #updating loc json file
-    df.to_json(f"data\\prod\\{fld.abbr}\\data.json", orient='values', date_format='iso')
-    dfsum.to_json(f"data\\prod\\{fld.abbr}\\cuml.json", orient='values', date_format='iso')
-
-    try:
-        update_pumpInfo()
-        df_analyze = analyze(fld.abbr)
-        df_analyze.to_json(f'data/prod/{fld.abbr}/analyze.json', orient='values', date_format='iso')
-    except Exception as err:
-        print(f'ANALYZE ERROR {err}')
+    df.to_json(f"data/prod/{abbr}/data.json", orient='values', date_format='iso')
+    dfsum.to_json(f"data/prod/{abbr}/cuml.json", orient='values', date_format='iso')
+    print('ll')
+    #if abbr == 'ST': Tanks.run()
+    
+    if abbr == 'ST' or abbr == 'ET':
+        try:
+            update_pumpInfo(abbr)
+            analyze(abbr)
+        except Exception as err:
+            print(f'ONE DRIVE ERROR {err}')
+    mnthlyProd(field)
+    move(abbr)
     return
 
 def parse_schedule(df_prod:pd.DataFrame) -> pd.DataFrame:
@@ -131,16 +151,16 @@ def parse_schedule(df_prod:pd.DataFrame) -> pd.DataFrame:
     #df = pd.merge(df,df_prod,on='Well Name',how='left').drop([1,'Date'],axis=1)
     return df
     
-def analyze(field) -> pd.DataFrame:
-    df = pd.read_json(f'data/prod/{field}/data.json')
+def analyze(fieldAbbr) -> pd.DataFrame:
+    df = pd.read_json(f'data/prod/{fieldAbbr}/data.json')
     cols = ["Well Name", "Date", "Oil (BBLS)","Gas (MCF)", "Water (BBLS)", "TP", "CP", "Comments","Datetime","Total Fluid","7DMA Oil","7DMA Fluid","30DMA Oil"]
     df = df.rename(columns={idx:el for idx,el in enumerate(cols)})
     past_days = df.sort_values('Datetime', ascending=False)['Datetime'].tolist()
     #df['MA Ratio Oil'] = df['7DMA Oil'] / df['30DMA Oil']
     df['MA Ratio Oil'] = np.where(df['30DMA Oil'] != 0, df['7DMA Oil'] / df['30DMA Oil'], 1)
 
-    scheduled = parse_schedule(df) if field == 'ST' else list()
-    print(scheduled)
+    scheduled = parse_schedule(df) if fieldAbbr == 'ST' else list()
+    
     conditions = {
         'Low MA Oil': (df["MA Ratio Oil"] < .7),
         'No Fluids': (df['Total Fluid'] == 0),
@@ -148,70 +168,81 @@ def analyze(field) -> pd.DataFrame:
     }
     
     mask = ((conditions["Low MA Oil"] | conditions["No Fluids"] | conditions['No Oil']) & ~(df['30DMA Oil'] == 0))
-    df_analysis = df.loc[df['Datetime'] == past_days[0]].loc[mask].reset_index(drop=True)
+    df_analyze = df.loc[df['Datetime'] == past_days[0]].loc[mask].reset_index(drop=True)
 
 
     #add case names        
-    df_analysis['Low MA Oil'] = (df_analysis["MA Ratio Oil"] < .7)
-    df_analysis['No Fluids'] = (df_analysis['Total Fluid'] == 0)
-    df_analysis['No Oil'] = (df_analysis['Oil (BBLS)'] == 0)
+    df_analyze['Low MA Oil'] = (df_analyze["MA Ratio Oil"] < .7)
+    df_analyze['No Fluids'] = (df_analyze['Total Fluid'] == 0)
+    df_analyze['No Oil'] = (df_analyze['Oil (BBLS)'] == 0)
 
-    df_analysis['case'] = df_analysis \
+    df_analyze['case'] = df_analyze \
                     .apply(lambda row: [condition for condition in conditions.keys() if row[condition]], axis=1)
     
     #remove scheduled if 
-    for idx,row in scheduled.iterrows(): 
-        row_match = df_analysis.loc[df_analysis['Well Name'] == row[0]]
+    for _,row in scheduled.iterrows(): 
+        row_match = df_analyze.loc[df_analyze['Well Name'] == row[0]]
         if not row_match.empty:
             df_well = df.loc[df['Well Name'] == row[0]]
 
-            days=0
-            for tf in df_well['Total Fluid'].tolist():
-                if tf != 0: break
-                else: days+=1
-            
-            if days <= int(row['Off']) and row_match['No Fluids'].tolist()[0]:
-                print(row_match['Well Name'].to_list()[0])
-                df_analysis=df_analysis.drop(row_match.index)
-                
-    
-    return df_analysis.drop(conditions.keys(),axis=1).reset_index(drop=True)
+            days=0#cant use comments, no consistency 
+            for _,r in df_well.iterrows():
+               if r['Total Fluid'] != 0: break
+               else: days += 1
+            if (days <= int(row['Off']) and row_match['No Fluids'].tolist()[0]):
+                df_analyze=df_analyze.drop(row_match.index)
+
+    df_analyze = df_analyze[df_analyze['Well Name'] != 'Thalmann #1']
+    df_analyze = df_analyze.drop(conditions.keys(),axis=1).reset_index(drop=True)            
+    df_analyze.to_json(f'data/prod/{fieldAbbr}/analyze.json', orient='values', date_format='iso')
 
 def write_formations():
-    df_forms_et = pd.read_json('db\\prodET\\formations.json'
+    df_forms_et = pd.read_json('db/prodET/formations.json'
                                ).rename(columns={0:"Well Name", 1 : "Formation"})
-    d = pd.concat([pd.read_excel('db\\prodST\\formations.xlsx'),df_forms_et]
+    d = pd.concat([pd.read_excel('db/prodST/formations.xlsx'),df_forms_et]
                     ).reset_index(drop=True).to_dict(orient='records')
 
     dd= {i['Well Name']:i['Formation'] for i in d}
-    with open('data\\misc\\formations.json','w') as f:
+    with open('data/misc/formations.json','w') as f:
         json.dump(dd,f)
 
-def update_pumpInfo():
-    #df = pd.read_excel("C:\\Users\\plaisancem\\OneDrive - CML Exploration\\CML\\STprod.xlsx")
-    df = pd.read_excel("C:\\Users\\plaisancem\\CML Exploration\\Travis Wadman - CML\\STprod.xlsx")
+def update_pumpInfo(abbr):
+    #df = pd.read_excel("C:/Users/plaisancem/OneDrive - CML Exploration/CML/STprod.xlsx")
+    if abbr == 'ST':
+        df = pd.read_excel("C:/Users/plaisancem/CML Exploration/Travis Wadman - CML/STprod.xlsx")
+    elif abbr == 'ET':
+        df = pd.read_excel("C:/Users/plaisancem/CML Exploration/Travis Wadman - CML/East Texas/East Texas Production Tracker.xlsx")
 
-    df = df.drop([col for col in df.columns if col not in ['Well Name','C','SPM','DH SL','Ideal bfpd','Pump Depth','GFLAP','Inc']],axis=1)
-    df.to_json('data\prod\ST\pumpinfo.json',orient='records',date_format='iso')
-    df.to_json('../frontend/data/ST/pumpInfo.json',orient='records',date_format='iso')
+    df = df.drop([col for col in df.columns if col not in ['Well Name','Last WO Date','C','SPM','DH SL','Ideal bfpd','Pump Depth','GFLAP','FL Date','Inc']],axis=1)
+    df['Last WO Date'] =  pd.to_datetime(df['Last WO Date'])
+    df['FL Date'] =  pd.to_datetime(df['FL Date'])
+
+    df['Last WO Date'] = df['Last WO Date'].dt.strftime('%Y-%m-%d')
+    df['FL Date'] = df['FL Date'].dt.strftime('%Y-%m-%d')
+
+
+    df.to_json(f'data/prod/{abbr}/pumpinfo.json',orient='records',date_format='iso')
+    df.to_json(f'../frontend/data/{abbr}/pumpInfo.json',orient='records',date_format='iso')
 
     return df
 
-def move(field):
-    paths = {f'data\\prod\\{field}\\cuml.json': f'../frontend/data/{field}/cumlProd{field}.json',
-             f'data\\prod\\{field}\\data.json': f'../frontend/data/{field}/prod{field}.json',
-             f'data\\prod\\{field}\\analyze.json': f'../frontend/data/{field}/analyze{field}.json',
+def move(fieldAbbr):
+    paths = {f'data/prod/{fieldAbbr}/cuml.json': f'../frontend/data/{fieldAbbr}/cumlProd{fieldAbbr}.json',
+             f'data/prod/{fieldAbbr}/data.json': f'../frontend/data/{fieldAbbr}/prod{fieldAbbr}.json',
+             f'data/prod/{fieldAbbr}/analyze.json': f'../frontend/data/{fieldAbbr}/analyze{fieldAbbr}.json',
              }
     try:
         for k,v in paths.items(): pd.read_json(k).to_json(v,orient='values',date_format='iso')
     except FileNotFoundError as err:
         print(err)
-    if field == 'ST': pd.read_json('data\\prod\\ST\\pumpinfo.json').to_json('../frontend/data/ST/pumpInfo.json',orient='records',date_format='iso')
+    if fieldAbbr == 'ST': pd.read_json('data/prod/ST/pumpinfo.json').to_json('../frontend/data/ST/pumpInfo.json',orient='records',date_format='iso')
     return   
 
-def moProd(field):
+def mnthlyProd(field):
+    abbr = ''.join([w[0] for w in field.split(' ')]).upper()
+
     # group by Well Name, Year, and Month
-    df_daily = pd.read_csv(f"data\prod\{field}\data.csv")
+    df_daily = pd.read_csv(f"data/prod/{abbr}/data.csv")
     df_daily['Date'] = pd.to_datetime(df_daily['Date'])
     df_daily['Month'] = df_daily['Date'].dt.month
     df_daily['Year'] = df_daily['Date'].dt.year
@@ -224,7 +255,7 @@ def moProd(field):
     monthly_sum = monthly_sum.drop('Month', axis=1)
 
     # group by Year, and Month
-    df_day = pd.read_csv(f"data\prod\{field}\data.csv")
+    df_day = pd.read_csv(f"data/prod/{abbr}/data.csv")
     df_day['Date'] = pd.to_datetime(df_day['Date'])
     df_day['Month'] = df_day['Date'].dt.month
     df_day['Year'] = df_day['Date'].dt.year
@@ -236,13 +267,13 @@ def moProd(field):
     mo_sum = mo_sum.drop('Year', axis=1)
     mo_sum = mo_sum.drop('Month', axis=1)
 
-    mo_sum['Well Name'] = 'South Texas Total' if field == 'ST' else 'East Texas Total'
+    mo_sum['Well Name'] = f'{field} Total'
 
     df_final = pd.concat([monthly_sum, mo_sum])
     df_final = df_final.sort_values('Date').reset_index(drop=True)
 
-    df_final.to_csv(f"data\prod\{field}\moData.csv", index=False) 
-    df_final.to_json(f"../frontend/data/{field}/dataMonthly{field}.json", orient='values', date_format='iso')
+    df_final.to_csv(f"data/prod/{abbr}/moData.csv", index=False) 
+    df_final.to_json(f"../frontend/data/{abbr}/dataMonthly{abbr}.json", orient='values', date_format='iso')
 
 def recYrProd(df:pd.DataFrame,field):
     df = df.copy()
@@ -321,7 +352,7 @@ def handleWT(df:pd.DataFrame) -> pd.DataFrame:
     return df
 
 def lstProd(field,day):#day YYYY-MM-dd
-    df = pd.read_csv(f'data\prod\{field}\data.csv')
+    df = pd.read_csv(f'data/prod/{field}/data.csv')
 
     wells = sorted(set(df['Well Name'].tolist()))
     wells = [w for w in wells if w not in pd.read_csv('data/prod/lastprod/shutins.csv')['Well'].tolist()]
@@ -337,10 +368,13 @@ def lstProd(field,day):#day YYYY-MM-dd
             days = round(unix_since/(60*60*24))
         res['Well Name'].append(well);res['Last Production'].append(d);res[f'Days since {day}'].append(days)
 
-    pd.DataFrame(res).to_csv(f'data\prod\lastProd\lastprod{field}.csv',index=False)
+    pd.DataFrame(res).to_csv(f'data/prod/lastProd/lastprod{field}.csv',index=False)
 
 
 if __name__ == '__main__':
-    for abbr,field in {'ST':'SOUTH TEXAS','ET':'EAST TEXAS','GC':'Gulf Coast','WT':'West TX','NM':'New Mexico'}.items():
-        prod(field=field,abbr=abbr) 
-        move(field=abbr)
+    updateApp(field='SOUTH TEXAS')
+    updateApp(field='EAST TEXAS')
+    updateApp(field='Gulf Coast')
+    updateApp(field='West TX')
+    updateApp(field='New Mexico')
+
