@@ -52,6 +52,8 @@ def payouts(field,mnth):
         .sort_values(['Well Name'], ascending = [True]).reset_index(drop=True)
     df = df[df['Well Name'] != 'Well Name']
     df.loc[df['Well Name'] == 'Margurite #1','Well Name'] = "Marguerite #1"
+    df.loc[df['Well Name'] == 'Beeler #16H RE','Well Name'] = "Beeler #16 RE"
+
     df.to_json("C:\\Users\\plaisancem\\Documents\\dev\\Apps\\Prod\\frontend\\data\\econ\\payouts.json", orient='records')
 
 def economics(field,mnth,mnthIgnore):
@@ -100,11 +102,12 @@ def combine():
 if __name__ == '__main__':
     #payoutsHist()
     #payouts('2024-04')#2024-01
-    mnth = 'Apr 2024'
-    mnth_ignore = 'May 2024'
-    economics('South Texas Only',mnth,mnth_ignore)
-    economics('East Texas',mnth,mnth_ignore)
-    economics('East Texas Woodbine',mnth,mnth_ignore)
-    payouts('','2024-06')
+    currMnth = datetime.now().strftime('%Y-%m')
+    revMnth = (datetime.now() - timedelta(days=60)).strftime('%b %Y')
+    billMnth = (datetime.now() - timedelta(days=30)).strftime('%b %Y')
+    economics('South Texas Only',revMnth,billMnth)
+    economics('East Texas',revMnth,billMnth)
+    economics('East Texas Woodbine',revMnth,billMnth)
+    payouts('',currMnth)
     combine()
     

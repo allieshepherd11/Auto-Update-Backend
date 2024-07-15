@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CML Exploration</title>
+    <script src="hyperbolicRate.js" defer></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="hyperbolicRate.css">
+</head>
+<body>
+    <div class="container">
+        <div class="form-container">
+            <form id="inputVar">
+                <label for="numMonths">Number of Months:</label>
+                <input type="number" id="numMonths" name="numMonths"value="24"><br>
+
+                <label for="qi">q<sub>i</sub>:</label>
+                <input type="number" id="qi" name="qi" step="0.000000001"value="20000"><br>
+                <label for="Di">D<sub>i</sub>:</label>
+                <input type="number" id="Di" name="Di" min="0" max="1" step="0.000000001"value=".2"><br>
+                <label for="b">b:</label>
+                <input type="number" id="b" name="b" min="0" max="1.2" step="0.000000001" value=".9"><br>
+
+                <label for="oilPrice">Oil Price:</label>
+                <input type="number" id="oilPrice" name="oilPrice" step="0.01" value="75"><br>
+                <label for="netInterest">Net Interest:</label>
+                <input type="number" id="netInterest" name="netInterest" step="0.001" value="0.75"><br>
+                <label for="taxRate">Tax Rate:</label>
+                <input type="number" id="taxRate" name="taxRate" step="0.001" value="0.954"><br>
+                <label for="intRate">Discount Rate (%):</label>
+                <input type="number" id="intRate" name="intRate" step="0.01" value="10"><br>
+                <label for="drillCost">Drilling Cost:</label>
+                <input type="number" id="drillCost" name="drillCost" step="0.01" value="3000000"><br>       
+
+                <input type="submit" value="Submit">
+            </form>
+        </div>
+        <div class="graph-and-results-container">
+            <div class="graph-container" id="hyperbolicRateCurve"></div>
+            <div id="results">
+                <p id="eur">EUR: </p>
+                <p id="NominalValue">Nominal Value: </p>
+                <p id="presentValue">Present Value: </p>
+                <p id="irr">IRR: </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -83,13 +83,15 @@ class IWell:
 
     def GET_wellProduction(self, well_id):
         x = requests.get(f'https://api.iwell.info/v1/wells/{well_id}/production?{self.filter}', headers={'Authorization': f'Bearer {self.token}'})
-        return x.json()['data']
+        if x.status_code == 200:
+            x = x.json()
+            if 'data' in x.keys():
+                return x['data']
+        return []
 
     def GET_wellFields(self, well_id):
         x = requests.get(f'https://api.iwell.info/v1/wells/{well_id}/fields?{self.filter}', headers={'Authorization': f'Bearer {self.token}'})
-        data = x.json()['data']
-        for i in data:
-            print(f"{i}\n")
+        return x.json()['data']
 
     def GET_wellFieldValue(self,well_id,field_id,dateRange=None):
         x = requests.get(f'https://api.iwell.info/v1/wells/{well_id}/fields/{field_id}/values?{self.filter}', headers={'Authorization': f'Bearer {self.token}'})
@@ -136,6 +138,16 @@ class IWell:
         print(data)
         return data
 
+    def GET_wellMeters(self,wellID):
+        x = requests.get(f'https://api.iwell.info/v1/wells/{wellID}/meters?since={since}', headers={'Authorization': f'Bearer {self.token}'})
+        data = x.json()['data']
+        return data
+    
+    def GET_wellMetersReadings(self,wellID,meterID):
+        x = requests.get(f'https://api.iwell.info/v1/wells/{wellID}/meters/{meterID}/readings?since={since}', headers={'Authorization': f'Bearer {self.token}'})
+        data = x.json()['data']
+        return data
+    
 def fetch_historical_data():
     since = datetime.strptime(str('2024-5-01'), "%Y-%m-%d").timestamp()
     iw = IWell(field='SOUTH TEXAS',abbr='ST',since=since)
@@ -165,23 +177,13 @@ def fetch_historical_data():
     with open('linePressuresHistory.json', 'w') as f:
         json.dump(res,f)
     return
+
 if __name__ == "__main__":
-    #'id': 4088, 'name': 'Static Pressure (Sales)'
-    #'id': 4091, 'name': 'Flow Rate (Sales)'
-    #'id': 4093, 'name': 'Static Pressure (Flare)'
-    #'id': 4096, 'name': 'Flow Rate (Flare)'
-    #fetch_historical_data()
-    since = datetime.strptime(str('2024-5-16'), "%Y-%m-%d").timestamp()
-    iw = IWell(field='SOUTH TEXAS',abbr='ST',since=since)
+    since = datetime.strptime(str('2024-6-01'), "%Y-%m-%d").timestamp()
+    iw = IWell(field='All Wells',abbr='ST',since=since)
+    print(iw.wells)
+    with open('allIwellWells.json', 'w') as f:
+        json.dump(iw.wells,f)
     res=defaultdict(list)
-    for well,wellId in iw.wells.items():
-        res['Well'].append(well)
-        try:
-            xx=iw.GET_wellFieldValue(wellId,4096)
-            for i in xx:
-                if i['value'] > 0:
-                    x = xx[-1]
-            
-        except: 
-            x = -1
-        res['Flare Rate (mcfd)'].append(x)
+        
+       

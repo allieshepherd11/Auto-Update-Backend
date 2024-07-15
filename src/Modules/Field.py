@@ -1,4 +1,8 @@
-import src.Modules.iWell as iWell
+try:
+    import src.Modules.iWell as iWell
+except ModuleNotFoundError:
+    import iWell 
+
 from datetime import datetime,timedelta
 import time
 import requests
@@ -8,28 +12,21 @@ import time
 import json
 import pandas as pd
 #from Tanks import WellBattery,format_save_loads,callable_loads,save_runtickets
-import src.Modules.Tanks as Tanks
 from collections import defaultdict
 import numpy as np
-
-
+import calendar
 
 class Field():
-    def __init__(self,field,abbr,start) -> None:
+    def __init__(self,field,abbr,start,range=None) -> None:
         self.field = field
         self.abbr = abbr
         self.start = start
-        self.since = datetime.strptime(str(start), "%Y-%m-%d").timestamp()
-        self.imprtDays = self.dStrs(start,str(datetime.today().date()))
-        mnths = [
-            ['2024-01-01','2024-01-31'],
-            ['2024-02-01','2024-02-29'],
-            ['2024-03-01','2024-03-31'],
-            ['2024-04-01','2024-04-30'],
-            ['2024-05-01','2024-05-31'],
-            ['2024-06-01','2024-06-30'],
-        ]
-        self.IWell = iWell.IWell(field,abbr,self.since)
+        self.since = start
+        if start:
+            self.since = datetime.strptime(str(start), "%Y-%m-%d").timestamp()
+            self.imprtDays = self.dStrs(start,str(datetime.today().date()))
+    
+        self.IWell = iWell.IWell(field,abbr,self.since,range)
         with open('data/prod/ST/lastpullRT.json','r') as f: self.since_tanks = json.load(f)
         
     def __repr__(self):
@@ -47,8 +44,8 @@ class Field():
         runtickets = pd.DataFrame()
         for well,id in self.IWell.wells.items():
             if 'Compressor' in well or 'Drip' in well or 'SWD' in well: continue
-            #if well != 'Balfour #1':continue
-            print(well)
+            #if well != 'Pfeiffer #1':continue
+            #print(well)
             if self.abbr == 'ST': 
                 dfGasImport = pd.concat([dfGasImport,self.importGasData(id,well)]).drop_duplicates()
                 batteries[well],well_tickets = self.tank_levels(well,id)
@@ -56,61 +53,64 @@ class Field():
                 
             prod = self.IWell.GET_wellProduction(id)
             comms = self.IWell.GET_wellComments(id)
-            tp = self.IWell.GET_wellFieldValue(id,607)
-            cp = self.IWell.GET_wellFieldValue(id,1415)
-            for i in prod[:]:
-                if i["production_time"] != i["updated_at"] and i["production_time"] < self.since:#gets updated prod, but not updates since last import
-                    i["Well Name"] = well
-                    updates.append(i)
-                    prod.remove(i)
-
-            for i in prod[:]:# copy of list
-                if i["date"] == str(datetime.today().date()) or i["date"] == str(self.start) or time.mktime(datetime.strptime(i["date"], "%Y-%m-%d").timetuple()) < self.since: prod.remove(i)
+            #tp = self.IWell.GET_wellFieldValue(id,607)
+            #cp = self.IWell.GET_wellFieldValue(id,1415)
+            
+            #for i in prod[:]:
+            #    if i["production_time"] != i["updated_at"] and i["production_time"] < self.since:#gets updated prod, but not updates since last import
+            #        i["Well Name"] = well
+            #        updates.append(i)
+            #        prod.remove(i)
+#
+            #for i in prod[:]:# copy of list
+            #    if i["date"] == str(datetime.today().date()) or i["date"] == str(self.start) or time.mktime(datetime.strptime(i["date"], "%Y-%m-%d").timetuple()) < self.since: prod.remove(i)
+            
             if prod == []:#needs fix
                 continue
             
             #check if shared battery
             alct_path = f'data/prod/{self.abbr}/allocations.json'
-            try: alct = pd.read_json(alct_path).to_dict()
-            except FileNotFoundError: alct = {'no':0}
-
-            if (id in alct.keys()): 
-                sharedBatt = Allocations(self.IWell,id,prod,comms,alct_path,self.imprtDays).allocate()
-                for entry in sharedBatt: importData.append(entry)
-                continue
+            if os.path.exists(alct_path):
+                alct = pd.read_json(alct_path).to_dict()
+                if (id in alct.keys()): 
+                    sharedBatt = Allocations(self.IWell,id,prod,comms,alct_path,self.imprtDays).allocate()
+                    for entry in sharedBatt: 
+                        importData.append(entry)
+                    continue
 
             #get list of production time for cp and tp
-            cp_times = [cp[i]["updated_at"] for i in range(len(cp))]
-            tp_times = [tp[i]["updated_at"] for i in range(len(tp))]
+            #cp_times = [cp[i]["updated_at"] for i in range(len(cp))]
+            #tp_times = [tp[i]["updated_at"] for i in range(len(tp))]
 
             for i in range(len(prod)):
                 date = prod[i]["date"]
                 date_2300 = time.mktime(datetime.strptime(date, "%Y-%m-%d").timetuple()) + 82800#11pm on day of production
                 #use tp/cp value that is recorded at the end of day
-                try:
-                    most_recent_cp = min(cp_times, key=lambda x:abs(x-date_2300))
-                    for j in cp:
-                        if j["updated_at"] == most_recent_cp:
-                            cp_value = j["value"]
-                            break
-                except:#no cp data
-                    cp_value = ""
-                try:
-                    most_recent_tp = min(tp_times, key=lambda x:abs(x-date_2300))
-                    for k in tp:
-                        if k["updated_at"] == most_recent_tp:
-                            tp_value = k["value"]
-                            break
-                except:#no tp data
-                    tp_value = ""
+                #try:
+                #    most_recent_cp = min(cp_times, key=lambda x:abs(x-date_2300))
+                #    for j in cp:
+                #        if j["updated_at"] == most_recent_cp:
+                #            cp_value = j["value"]
+                #            break
+                #except:#no cp data
+                #    cp_value = ""
+                #try:
+                #    most_recent_tp = min(tp_times, key=lambda x:abs(x-date_2300))
+                #    for k in tp:
+                #        if k["updated_at"] == most_recent_tp:
+                #            tp_value = k["value"]
+                #            break
+                #except:#no tp data
+                #    tp_value = ""
 
-                data = [well,prod[i]["date"],prod[i]["oil"],prod[i]["gas"],prod[i]["water"],tp_value,cp_value]
+                data = [well,prod[i]["date"],prod[i]["oil"],prod[i]["gas"],prod[i]["water"],0,0]
 
                 for c in range(len(comms)):
                     dt = datetime.fromtimestamp(comms[c]['note_time']).strftime('%Y-%m-%d')
                     if dt == date: 
                         data.append(comms[c]['message'])
                         break
+                
                 if len(data) == 7: data.append("")
                 importData.append(data)
                 
@@ -120,13 +120,11 @@ class Field():
             runtickets.to_json('data/prod/ST/tanks/runtickets.json')
         
 
-
         dfimport = pd.DataFrame(data=importData,columns=["Well Name","Date","Oil (BBLS)","Gas (MCF)","Water (BBLS)","TP","CP","Comments"])
         dfimport = dfimport.fillna('')
         dfimport = dfimport.sort_values(['Date', 'Well Name'], ascending = [False , True])
         dfimport.Date = pd.to_datetime(dfimport.Date)
         dfimport = dfimport.reset_index(drop=True)
-        dfGasImport.to_csv('gasImport.csv',index=False)
         return dfimport,updates,batteries,dfGasImport
     
     def importGasData(self,wellId,well):
@@ -348,9 +346,16 @@ class Allocations():
         tests = self.alct_db[self.well_id]['tests'][lst_mnth]
 
         print(date)
-        avgs = {f'{w}_{ty}':round(sum(tests[str(w)][ty])/len(tests[str(w)][ty]),2) 
-                for w in [wn1,wn2,self.twell[date]] for ty in ['oil','gas','water']}
-        
+        #avgs = {f'{w}_{ty}':round(sum(tests[str(w)][ty])/len(tests[str(w)][ty]),2) 
+        #        for w in [wn1,wn2,self.twell[date]] for ty in ['oil','gas','water']}
+        avgs = {}
+        for ty in ['oil','gas','water']:
+            for w in [wn1,wn2,self.twell[date]]:
+                try:
+                    avgs[f'{w}_{ty}'] = round(sum(tests[str(w)][ty])/len(tests[str(w)][ty]),2)
+                except ZeroDivisionError:
+                    avgs[f'{w}_{ty}'] = 0
+
         #res = {w:{'oil':[],'gas':[],'water':[]} for w in [wn1,wn2,self.twell[date]]}
         #for k,v in avgs.items():
         #    unpack = k.split('_')
@@ -433,7 +438,6 @@ class Allocations():
                     #if date[-2:] != '01': 
                     tests = self.alct_db.copy()
                     tests = tests[self.well_id]['tests'][date[:7]]
-                    #print(f'TESTS {tests}')
                     avgs = {}
                     for w in wn1,wn2,self.twell[date]:
                         for ty in typs:
@@ -474,24 +478,43 @@ class Allocations():
                     res.append([f'{self.well_name} #{wn2}',date,o_lft*adj_allcts[wn2]['oil'],
                                 g_lft*adj_allcts[wn2]['gas'],w_lft*adj_allcts[wn2]['water'],"0","0",comm[wn2]])
                 #update allocations
-                #alct_main = pd.read_json(self.alct_path).to_dict()
-                #print(f'aclect {alct_main}')
-                #try: 
-                #    for ty in typs: alct_main[self.well_id]['tests'][date[:7]][str(self.twell[date])][ty].append(self.tprod[date][ty])
-                #except KeyError: 
-                #    alct_main[self.well_id]['tests'][date[:7]] = {}
-                #    for ty in typs: alct_main[self.well_id]['tests'][date[:7]][int(self.twell[date])][ty].append(self.tprod[date][ty])
-                #with open('data/prod/NM/allocations.json','w') as f: json.dump(alct_main,f)
+                alct_main = pd.read_json(self.alct_path).to_dict()
+                print(f'aclect {alct_main}')
+                print(self.twell[date])
+                if date[:7] in alct_main[self.well_id]['tests'].keys():
+                    for ty in typs: alct_main[self.well_id]['tests'][date[:7]][str(self.twell[date])][ty].append(self.tprod[date][ty])
+                else: 
+                    alct_main[self.well_id]['tests'][date[:7]] = {int(w): {ty: [] for ty in typs} for w in [wn1, wn2, self.twell[date]]}
+                    for ty in typs: alct_main[self.well_id]['tests'][date[:7]][int(self.twell[date])][ty].append(self.tprod[date][ty])
+                with open('data/prod/NM/allocations.json','w') as f: json.dump(alct_main,f)
         return res
 
-if __name__ == '__main__':
-    start = '2024-06-01'
-    fld = Field('SOUTH TEXAS','ST',start)
-    _,_,_,dfGas = fld.importData()
-    dfGas.to_csv('junegas.csv',index=False)
-    exit()
-    dfimport,updates = fld.importData()
+def generateMnthArray(start_year, end_year):
+    date_array = []
+    for year in range(start_year, end_year + 1):
+        for month in range(1, 13):
+            first_day = f"{year}-{month:02d}-01"
+            last_day = f"{year}-{month:02d}-{calendar.monthrange(year, month)[1]}"
+            date_array.append([first_day, last_day])
+    return date_array
 
+
+if __name__ == '__main__':
+    mnths = generateMnthArray(2014,2024)
+    with open('data/misc/missingWells.json', 'r') as f:
+        missingWells = json.load(f)
+
+    df = pd.DataFrame()
+    for mnth in mnths:
+        print(mnth[0])
+        fld = Field('All Wells','',None,mnth)
+        fld.IWell.wells = missingWells
+        dfimport,_,_,_ = fld.importData()
+        dfimport.to_csv(f'data/misc/dfs/{mnth[0]}.csv',index=0)
+        df = pd.concat([df,dfimport])
+        
+
+    df.to_csv('missingProd.csv',index=False)
 
     
 

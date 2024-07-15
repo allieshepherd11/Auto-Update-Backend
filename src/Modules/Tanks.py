@@ -1,4 +1,3 @@
-import src.Modules.iWell as iWell
 from datetime import datetime,timedelta
 import time
 import requests
@@ -9,8 +8,11 @@ import pandas as pd
 from collections import defaultdict
 import math
 import re
-import src.Modules.Field as tankFld
-
+try:
+    import src.Modules.Field as tankFld
+except ModuleNotFoundError:
+    import Field as tankFld
+    
 
 
 class WellBattery:
@@ -86,7 +88,9 @@ def days_to_fill(well,battery,df):
             tot[tank['type']] += round((tank['capcity'] - (tank['top_feet']*12 + tank['top_inches'])*tank['factor']) / avgF,2)
         else:
             tot[tank['type']] = -1
-    
+    for ty,val in tot.items():
+        if math.isnan(val):
+            tot[ty] = -1
     return tot
 
 def callable_loads():
@@ -164,6 +168,7 @@ def fs_loadsFE(data):
                     round(dtf[load['type']],2),
                     load['tank_name']
                 ])
+            
     with open('../frontend/data/ST/loads.json','w') as f: json.dump(loads_display,f)
     with open('data/prod/ST/tanks/loadsDisplay.json','w') as f: json.dump(loads_display,f)
 
@@ -280,4 +285,9 @@ def run():
     sendLoads(loads)
 
 if __name__ == '__main__':
+    with open("data/prod/ST/tanks/loads.json",'r') as f: data=json.load(f)
+    fs_loadsFE(data)
+    fs_batteriesFE()
+    exit()
+
     run()

@@ -8,7 +8,7 @@ import webbrowser
 import numpy as np
 import re
 import src.Modules.Tanks as Tanks
-
+from collections import defaultdict
 
 def updateApp(field,importProd=True):
     print(field)
@@ -46,8 +46,8 @@ def updateApp(field,importProd=True):
     df['Oil (BBLS)'] = pd.to_numeric(df['Oil (BBLS)'])
     df['Gas (MCF)'] = pd.to_numeric(df['Gas (MCF)'])
     df.reset_index(drop=True, inplace=True)
-    df['Water (BBLS)'].replace('',0, inplace=True)
-    df['Gas (MCF)'].replace('',0, inplace=True)
+    df['Water (BBLS)'] = df['Water (BBLS)'].replace('',0)
+    df['Gas (MCF)'] = df['Gas (MCF)'].replace('',0)
     df['Oil (BBLS)'] = df['Oil (BBLS)'].clip(lower=0).round()
     df['Water (BBLS)'] = df['Water (BBLS)'].clip(lower=0).round()
     df['Gas (MCF)'] = df['Gas (MCF)'].clip(lower=0).round()
@@ -63,11 +63,7 @@ def updateApp(field,importProd=True):
     
     df = df[df['Well Name'] != title]
     df['Well Name'] = df['Well Name'].str.title()
-    try:
-        with open("data/misc/excludeWells.json",'r') as f: excludeWells = json.load(f)[abbr]
-        df=df.loc[~df['Well Name'].isin(excludeWells)].reset_index(drop=True)
-    except KeyError:pass
-
+    
     with open("data/misc/wnMap.json",'r') as f: wnMap = json.load(f)
     for k,v in wnMap.items(): df.loc[df['Well Name'] == k,'Well Name'] = v
 
@@ -96,11 +92,10 @@ def updateApp(field,importProd=True):
     df['Total Fluid'] = df['Oil (BBLS)'] + df['Water (BBLS)']
 
     df = df.sort_values(['Date', 'Well Name'], ascending = [True , True]).reset_index(drop=True)
-    df['7DMA Oil'] = df.groupby('Well Name')['Oil (BBLS)'].rolling(window=7).mean().reset_index(level=0, drop=True)
-    df['7DMA Fluid'] = df.groupby('Well Name')['Total Fluid'].rolling(window=7).mean().reset_index(level=0, drop=True)
-    df['30DMA Oil'] = df.groupby('Well Name')['Oil (BBLS)'].rolling(window=30).mean().reset_index(level=0, drop=True)
+    df['7DMA Oil'] = df.groupby('Well Name')['Oil (BBLS)'].rolling(window=7).mean().reset_index(level=0, drop=True).round(1)
+    df['7DMA Fluid'] = df.groupby('Well Name')['Total Fluid'].rolling(window=7).mean().reset_index(level=0, drop=True).round(1)
+    df['30DMA Oil'] = df.groupby('Well Name')['Oil (BBLS)'].rolling(window=30).mean().reset_index(level=0, drop=True).round(1)
     df = df.sort_values(['Date', 'Well Name'], ascending = [False , True]).reset_index(drop=True)
-    
     # ADD DATE COLUMN FOR X AXIS USE (DateYAxis) & CHANGING DATATYPE TO Object
     df['DateYAxis'] =  df['Date']
     df['DateYAxis'] =  pd.to_datetime(df['Date'])
@@ -116,18 +111,38 @@ def updateApp(field,importProd=True):
 
     df = df[colsOrder]
     
+    if abbr == 'ST':
+        with open("data/misc/excludeWells.json",'r') as f: excludeWells = json.load(f)[abbr]
+        dfOldWells = df.loc[df['Well Name'].isin(excludeWells)].reset_index(drop=True)
+        df=df.loc[~df['Well Name'].isin(excludeWells)].reset_index(drop=True)
+        dfOldWells.to_json('../frontend/data/ST/pluggedData.json', orient='values', date_format='iso')
+
+    dfpre2004 = pd.read_csv('data/misc/pre2004Cumls.csv')
+    for _,row in dfpre2004.iterrows():
+        mask = dfsum['Well Name'].str.lower() == row['Well Name'].lower()
+        if not mask.empty:
+            dfsum.loc[mask,['Oil (BBLS)','Gas (MCF)']] += row['Oil']/1000,row['Gas']/1000
+
     #updating loc json file
     df.to_json(f"data/prod/{abbr}/data.json", orient='values', date_format='iso')
     dfsum.to_json(f"data/prod/{abbr}/cuml.json", orient='values', date_format='iso')
-    print('ll')
-    #if abbr == 'ST': Tanks.run()
     
+    if abbr == 'ST' or abbr == 'ET':
+        with open('../frontend/data/misc/recentProdDate.json','r+') as f:
+            data = json.load(f)
+            data[abbr.upper()] = str(df.iloc[0]['Date']).strip()[:-6]
+            f.seek(0)
+            json.dump(data, f)
+            f.truncate()
+
+    #if abbr == 'ST' and importProd: Tanks.run()
     if abbr == 'ST' or abbr == 'ET':
         try:
             update_pumpInfo(abbr)
             analyze(abbr)
         except Exception as err:
             print(f'ONE DRIVE ERROR {err}')
+    
     mnthlyProd(field)
     move(abbr)
     return
@@ -370,11 +385,18 @@ def lstProd(field,day):#day YYYY-MM-dd
 
     pd.DataFrame(res).to_csv(f'data/prod/lastProd/lastprod{field}.csv',index=False)
 
+def meterStatus():
+    dfprod = pd.read_csv('data/prod/ST/data.csv')
+    print(df)
+    wells = sorted(set(dfprod['Well Name'].tolist()))
+    res = defaultdict(list)
+    for well in wells:
+        dfWell = df.loc[df['Well Name'] == well].reset_index()
+        print(dfWell)
+        exit()
+    return
 
 if __name__ == '__main__':
-    updateApp(field='SOUTH TEXAS')
-    updateApp(field='EAST TEXAS')
-    updateApp(field='Gulf Coast')
-    updateApp(field='West TX')
-    updateApp(field='New Mexico')
+    for idx,f in enumerate(['SOUTH TEXAS','EAST TEXAS','Gulf Coast','West TX','New Mexico']):
+        updateApp(f,1)
 
