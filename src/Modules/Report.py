@@ -7,9 +7,11 @@ import json
 import time
 
 class ProdReport():
-    def __init__(self, field:str,title:str,day=None):
+    def __init__(self, field:str,title:str,clientName=None,wells=None,day=None):
         self.field = field
-        self.title = title.upper() if field != 'WT' else 'WEST TEXAS'
+        self.wells = wells
+        self.clientName = clientName
+        self.title = title.title().replace(' Re ',' RE ')
         self.dtype = {'Oil (BBLS)': float, 'Water (BBLS)': float, 'Gas (MCF)': float, 'TP': float, 'CP': float, 'Comments': str}
         self.df = pd.read_csv(f'data\\prod\\{self.field}\\data.csv', dtype=self.dtype)
         self.day = day if day is not None else self.df['Date'][0]
@@ -24,7 +26,6 @@ class ProdReport():
             self.df = self.df[mask]
     
     def prepdf(self, df:pd.DataFrame):
-        print(f'DFFF {df}')
         df = df[df['Well Name'] != 'South Texas Total']
         mon = self.day[:-3]
         df['Date'] = pd.to_datetime(df['Date'])
@@ -39,13 +40,23 @@ class ProdReport():
         else: col_ord = ['Well Name','Date','Oil (BBLS)','Gas (MCF)','Water (BBLS)', 'MTD Oil', 'MTD Gas', 'MTD Water','TP','CP','Comments']
         df = df.reindex(columns=col_ord)
 
-        df = df[df['Date'] == self.day]
-        df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
-        df = df.drop(['Date'],axis=1).fillna('')
-        print(f'DFFF11 {df}')
+        if self.wells is None:
+            df = df[df['Date'] == self.day]
+            df = df.drop(['Date'],axis=1).fillna('')
+        else: 
+            df = df.loc[df['Well Name'].isin(self.wells)]
+            df = df.sort_values(['Date', 'Well Name'], ascending = [True , True])
+            df['dateidx'] = pd.to_datetime(df['Date'])
+            df.set_index('dateidx', inplace=True)
+            df['MTD Oil'] = df.groupby(df.index.to_period('M'))['Oil (BBLS)'].cumsum()
+            df['MTD Gas'] = df.groupby(df.index.to_period('M'))['Gas (MCF)'].cumsum()
+            df['MTD Water'] = df.groupby(df.index.to_period('M'))['Water (BBLS)'].cumsum()
 
-        scols = [col for col in df.columns if 'Oil' in col or 'Gas' in col or 'Water' in col]
-        df = df._append(df[scols].sum(),ignore_index=True)
+            df['Date'] = df['Date'].dt.date
+
+        df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
+        
+        df = df._append(df[['Oil (BBLS)', 'Gas (MCF)', 'Water (BBLS)']].sum(),ignore_index=True)
         df.iloc[len(df)-1,df.columns.get_loc('Well Name')] = 'Total'
 
         for col in df.columns:
@@ -53,18 +64,15 @@ class ProdReport():
                 df[col] = np.round(df[col]).astype('Int64')
         widths = self.workoutWidth(df)
         df = df.reset_index(drop=True)
-        print(df)
         
 
         df[df.select_dtypes(include='Int64').columns] = df.select_dtypes(include='Int64').astype('float64')
         df = df.replace(pd.NA,np.nan)
-        print(df)
         return pd.DataFrame(df.fillna(' ')),widths
     
     def workoutWidth(self, df:pd.DataFrame):
         pdf = FPDF()
         pdf.set_font("Arial", size=7)
-        print(f'df {df}')
         widths = {}
         pos_end = pdf.l_margin
         for col in df.columns:
@@ -96,8 +104,9 @@ class ProdReport():
                 widths[poor]['pos_end'] += gift*(idx + 1)
         return widths
     
-    def genReport(self):        
+    def genReport(self):
         df,col_widths = self.prepdf(self.df)
+
         df[df.select_dtypes(include='float64').columns] = df.select_dtypes(include='float64').astype('Int64')
         pdf = FPDF()
         pdf.set_font("Arial", size=10)
@@ -191,10 +200,16 @@ class ProdReport():
                     
                 pdf.cell(cell_width, row_height, txt=cell_value, border=1, ln=False, align='L')
             pdf.ln(row_height)
-        
-        print(f'self.day {self.dateTitle}')
-        pdf.output(f'data/prod/reports/{self.dateTitle}-{self.title}.pdf','F')    
-        pdf.output(f'data/prod/{self.field}/report.pdf','F')
+
+
+        pathtar = self.clientName if self.clientName else self.field
+        reportTitle = f"{self.title} - {self.dateTitle}"
+        pdf_path = f'data/prod/reports/{pathtar}/{reportTitle}.pdf'
+        csv_path = f'data/prod/reports/{pathtar}/{reportTitle}.csv'
+        df.to_csv(csv_path,index=False)
+        pdf.output(pdf_path,'F')  
+
+        return {'pdf':pdf_path,'csv':csv_path},reportTitle
 
 def emailBody(date=None):
     from docx import Document
@@ -204,7 +219,6 @@ def emailBody(date=None):
     area_map = {'ST':'SOUTH TEXAS','ET':'EAST TEXAS','WB':'EAST TEXAS WB',
                 'WT':'WEST TEXAS','NM':'NEW MEXICO','GC':'GULF COAST'}
     date = dt.datetime.fromtimestamp(int(time.time()) - 60*60*24).strftime('%Y-%m-%d') if date is None else date
-    print(date)
     res = {"Area": [], "BBL": [], 'MCF': []}
     oil_tot = 0; gas_tot = 0
     for field in fields:
@@ -227,8 +241,6 @@ def emailBody(date=None):
     df = pd.DataFrame(res)
     df['BBL'] = df['BBL'].astype(int)
     df['MCF'] = df['MCF'].astype(int)
-    print(df)
-
     doc = Document()
 
     table = doc.add_table(rows=1, cols=len(df.columns))
@@ -245,11 +257,15 @@ def emailBody(date=None):
     doc.save('data\prod\\reports\\report.docx')
     return
 
+
 if __name__ == '__main__':
+    reprt = ProdReport(field='ST',title='Kleimann #3 RE',well='Kleimann #3 RE')
+    reprt.genReport()
+    exit()
     for field,title in {'ST':'South Texas','ET':'East Texas','WT':'West TX','GC':'Gulf Coast','NM':'New Mexico'}.items():
-        reprt = ProdReport(field=field,title=title,day='2024-05-30')
+        reprt = ProdReport(field=field,title=title)
         reprt.genReport()
-        webbrowser.open_new_tab(f"C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\backend\\data\\prod\\reports\\{field}\\report.pdf")
+        webbrowser.open_new_tab(f"C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\backend\\data\\prod\\reports\\report.pdf")
     reprt = ProdReport(field='WB',title='Woodbine')
     reprt.genReport()
     exit()

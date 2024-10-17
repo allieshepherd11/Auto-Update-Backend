@@ -40,6 +40,7 @@ class IWell:
         self.calls = 0
         self.token = self.access()
         w = self.GET_field(self.GET_wellGroups()[field])
+        
         if self.abbr == "WT": w.update(self.GET_field('2502'))#cc wells
         self.wells = {well:w[well] for well in sorted(w)}
 
@@ -153,11 +154,6 @@ def fetch_historical_data():
     iw = IWell(field='SOUTH TEXAS',abbr='ST',since=since)
 
     mnths = [
-        ['2023-01-01','2023-01-31'],
-        ['2023-02-01','2023-02-28'],
-        ['2023-03-01','2023-03-31'],
-        ['2023-04-01','2023-04-30'],
-        ['2023-05-01','2023-05-31'],
         ['2023-06-01','2023-06-30'],
         ['2023-07-01','2023-07-31'],
         ['2023-08-01','2023-08-31'],
@@ -165,6 +161,11 @@ def fetch_historical_data():
         ['2023-10-01','2023-10-31'],
         ['2023-11-01','2023-11-30'],
         ['2023-12-01','2023-12-31'],
+        ['2024-01-01','2024-01-31'],
+        ['2024-02-01','2024-02-28'],
+        ['2024-03-01','2024-03-31'],
+        ['2024-04-01','2024-04-30'],
+        ['2024-05-01','2024-05-31'],
     ]
     with open('linePressuresHistory.json', 'r') as f:
         res = json.load(f)
@@ -179,11 +180,6 @@ def fetch_historical_data():
     return
 
 if __name__ == "__main__":
-    since = datetime.strptime(str('2024-6-01'), "%Y-%m-%d").timestamp()
-    iw = IWell(field='All Wells',abbr='ST',since=since)
-    print(iw.wells)
-    with open('allIwellWells.json', 'w') as f:
-        json.dump(iw.wells,f)
-    res=defaultdict(list)
-        
+    since = datetime.strptime(str('2024-8-01'), "%Y-%m-%d").timestamp()
+    iw = IWell('','',since)
        

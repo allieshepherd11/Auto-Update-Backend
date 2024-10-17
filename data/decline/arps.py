@@ -22,3 +22,4 @@ def getArpsParams(df):
     for t, rate in zip(time_days, predicted_rates):
         print(f"Predicted production rate at {t} days: {rate:.2f} bbl/day")
 
+getArpsParams(5)

@@ -2,7 +2,7 @@ try:
     import src.Modules.iWell as iWell
 except ModuleNotFoundError:
     import iWell 
-
+from functools import reduce
 from datetime import datetime,timedelta
 import time
 import requests
@@ -16,6 +16,7 @@ from collections import defaultdict
 import numpy as np
 import calendar
 
+
 class Field():
     def __init__(self,field,abbr,start,range=None) -> None:
         self.field = field
@@ -25,7 +26,7 @@ class Field():
         if start:
             self.since = datetime.strptime(str(start), "%Y-%m-%d").timestamp()
             self.imprtDays = self.dStrs(start,str(datetime.today().date()))
-    
+
         self.IWell = iWell.IWell(field,abbr,self.since,range)
         with open('data/prod/ST/lastpullRT.json','r') as f: self.since_tanks = json.load(f)
         
@@ -45,7 +46,7 @@ class Field():
         for well,id in self.IWell.wells.items():
             if 'Compressor' in well or 'Drip' in well or 'SWD' in well: continue
             #if well != 'Pfeiffer #1':continue
-            #print(well)
+            print(well)
             if self.abbr == 'ST': 
                 dfGasImport = pd.concat([dfGasImport,self.importGasData(id,well)]).drop_duplicates()
                 batteries[well],well_tickets = self.tank_levels(well,id)
@@ -53,17 +54,17 @@ class Field():
                 
             prod = self.IWell.GET_wellProduction(id)
             comms = self.IWell.GET_wellComments(id)
-            #tp = self.IWell.GET_wellFieldValue(id,607)
-            #cp = self.IWell.GET_wellFieldValue(id,1415)
-            
-            #for i in prod[:]:
-            #    if i["production_time"] != i["updated_at"] and i["production_time"] < self.since:#gets updated prod, but not updates since last import
-            #        i["Well Name"] = well
-            #        updates.append(i)
-            #        prod.remove(i)
-#
-            #for i in prod[:]:# copy of list
-            #    if i["date"] == str(datetime.today().date()) or i["date"] == str(self.start) or time.mktime(datetime.strptime(i["date"], "%Y-%m-%d").timetuple()) < self.since: prod.remove(i)
+            tp = self.IWell.GET_wellFieldValue(id,607)
+            cp = self.IWell.GET_wellFieldValue(id,1415)
+        
+            for i in prod[:]:
+                if i["production_time"] != i["updated_at"] and i["production_time"] < self.since:#gets updated prod, but not updates since last import
+                    i["Well Name"] = well
+                    updates.append(i)
+                    prod.remove(i)
+
+            for i in prod[:]:# copy of list
+                if i["date"] == str(datetime.today().date()) or i["date"] == str(self.start) or time.mktime(datetime.strptime(i["date"], "%Y-%m-%d").timetuple()) < self.since: prod.remove(i)
             
             if prod == []:#needs fix
                 continue
@@ -77,34 +78,19 @@ class Field():
                     for entry in sharedBatt: 
                         importData.append(entry)
                     continue
+                
+            cpAvg,tpAvg = 0,0
 
-            #get list of production time for cp and tp
-            #cp_times = [cp[i]["updated_at"] for i in range(len(cp))]
-            #tp_times = [tp[i]["updated_at"] for i in range(len(tp))]
+            if len(cp) > 0:
+                if 'value' in cp[-1].keys():
+                    cpAvg = cp[-1]['value']
+            if len(tp) > 0:
+                if 'value' in tp[-1].keys():
+                    tpAvg = tp[-1]['value']
 
             for i in range(len(prod)):
                 date = prod[i]["date"]
-                date_2300 = time.mktime(datetime.strptime(date, "%Y-%m-%d").timetuple()) + 82800#11pm on day of production
-                #use tp/cp value that is recorded at the end of day
-                #try:
-                #    most_recent_cp = min(cp_times, key=lambda x:abs(x-date_2300))
-                #    for j in cp:
-                #        if j["updated_at"] == most_recent_cp:
-                #            cp_value = j["value"]
-                #            break
-                #except:#no cp data
-                #    cp_value = ""
-                #try:
-                #    most_recent_tp = min(tp_times, key=lambda x:abs(x-date_2300))
-                #    for k in tp:
-                #        if k["updated_at"] == most_recent_tp:
-                #            tp_value = k["value"]
-                #            break
-                #except:#no tp data
-                #    tp_value = ""
-
-                data = [well,prod[i]["date"],prod[i]["oil"],prod[i]["gas"],prod[i]["water"],0,0]
-
+                data = [well,prod[i]["date"],prod[i]["oil"],prod[i]["gas"],prod[i]["water"],tpAvg,cpAvg]
                 for c in range(len(comms)):
                     dt = datetime.fromtimestamp(comms[c]['note_time']).strftime('%Y-%m-%d')
                     if dt == date: 
@@ -131,6 +117,7 @@ class Field():
         res = defaultdict(dict)
         def da(data,ty):
             groupedData = defaultdict(list)
+            #dates = ['2024-07-20','2024-07-21','2024-07-22']
             for reading in data:
                 dt_string = datetime.fromtimestamp(reading['reading_time']).strftime('%Y-%m-%d %H:%M:%S')
                 date = dt_string.split(' ')[0]
@@ -500,22 +487,11 @@ def generateMnthArray(start_year, end_year):
 
 
 if __name__ == '__main__':
-    mnths = generateMnthArray(2014,2024)
-    with open('data/misc/missingWells.json', 'r') as f:
-        missingWells = json.load(f)
-
-    df = pd.DataFrame()
-    for mnth in mnths:
-        print(mnth[0])
-        fld = Field('All Wells','',None,mnth)
-        fld.IWell.wells = missingWells
-        dfimport,_,_,_ = fld.importData()
-        dfimport.to_csv(f'data/misc/dfs/{mnth[0]}.csv',index=0)
-        df = pd.concat([df,dfimport])
-        
-
-    df.to_csv('missingProd.csv',index=False)
-
+    fld = Field('SOUTH TEXAS','ST','2024-07-20',None)
+    print(fld.IWell.wells)
+    #'Pfeiffer-Byrd #1': 33344
+    fld.importGasData(33344,'Pfeiffer-Byrd #1')
+       
     
 
 
