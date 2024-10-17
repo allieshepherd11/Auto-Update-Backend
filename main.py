@@ -487,13 +487,10 @@ def meterStatus():
         exit()
     return
 
-if __name__ == '__main__':
-    update_pumpInfo('ST')
-    exit()
-    #for idx,f in enumerate(['SOUTH TEXAS','EAST TEXAS','Gulf Coast','West TX','New Mexico']):
-    #    updateApp(field=f,importProd=1)
-
+def automated_reports():
     receipent = 'PlaisanceM@cmlexp.com'
+    #receipent = 'amirpts@dutcherco.com'
+
     wells = ['Kleimann #3 RE']
     bot = ReportBot(recipient=receipent,wells=wells)
     relativePaths,reportTitle = bot.genReport()
@@ -506,3 +503,10 @@ if __name__ == '__main__':
                   attachments_paths=attachments,
                   bcc_address='PlaisanceM@cmlexp.com'
                   )
+    return
+
+if __name__ == '__main__':
+    for idx,f in enumerate(['SOUTH TEXAS','EAST TEXAS','Gulf Coast','West TX','New Mexico']):
+        updateApp(field=f,importProd=1)
+
+    automated_reports()
