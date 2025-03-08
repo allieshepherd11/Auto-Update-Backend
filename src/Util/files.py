@@ -4,7 +4,7 @@ from collections import defaultdict
 from itertools import zip_longest
 import pandas as pd
 import time
-
+from datetime import datetime
 
 def openFiles():
     import webbrowser
@@ -31,10 +31,8 @@ def openFiles():
             webbrowser.open_new_tab(rprtsDir+'/'+files[0])
             time.sleep(1)
 
-def walkPath():
-    path = "C:/"
+def walkPath(keys,path="C:/"):
     #path = "C:/Users/plaisancem/CML Exploration/Brandon Rogers - Well Files/"
-    keys = ['cornnet']
     res = defaultdict(list)
     for root,folders,files in os.walk(path):
         for fld,f in zip_longest(folders,files):
@@ -46,11 +44,18 @@ def walkPath():
                         res[root].append(fld)
                 if f:
                     if k in f.lower():
+                        file_path = os.path.join(root, f)
+                        modified_time = os.path.getmtime(file_path)
+                        modified_date = datetime.fromtimestamp(modified_time)
                         print(root,f)
-                        res[root].append(f)
+                        res['root'].append(root)
+                        res['file'].append(f)
+                        res['time'].append(modified_date)
+
+
     print(res)
-    with open('pa.json', 'w') as f:
-        json.dump(res,f)
+    df = pd.DataFrame(res)
+    df.to_csv('keys.csv')
 
 if __name__ == '__main__':
-    walkPath()
+    walkPath(keys=['.xlsx'],path="C:/")

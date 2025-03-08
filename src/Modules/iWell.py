@@ -98,8 +98,15 @@ class IWell:
         x = requests.get(f'https://api.iwell.info/v1/wells/{well_id}/fields/{field_id}/values?{self.filter}', headers={'Authorization': f'Bearer {self.token}'})
         if x.status_code == 404:
             return [{"updated_at":-1,"values":-1}]
-        return x.json()['data']
+        
+        x = x.json()
+        if 'data' in x.keys():
+            return x['data']
+        else:
+            print(f'ERROR {well_id} {field_id}\n{x}')
 
+            return [{"updated_at":-1,"values":-1}]
+    
     def GET_wellComments(self, well_id):#lists from past to present
         x = requests.get(f'https://api.iwell.info/v1/wells/{well_id}/notes?{self.filter}', headers={'Authorization': f'Bearer {self.token}'})
         data = x.json()
@@ -109,18 +116,21 @@ class IWell:
     def GET_tanks(self):
         x = requests.get('https://api.iwell.info/v1/tanks', headers={'Authorization': f'Bearer {self.token}'})
         data = x.json()['data']
-        print(f' data {data}')
         df = pd.DataFrame(data)
         df.to_csv('tanks.csv',index=False)
+        return data
 
     def GET(self,url):
         x = requests.get(url, headers={'Authorization': f'Bearer {self.token}'})
         return x.json()['data']
 
-    def GET_tankReading(self,id,since=''):
-        x = requests.get(f'https://api.iwell.info/v1/tanks/{id}/readings?since={since}', headers={'Authorization': f'Bearer {self.token}'})
-        data = x.json()['data']
-        return data
+    def GET_tankReading(self,tankId,since=''):
+        x = requests.get(f'https://api.iwell.info/v1/tanks/{tankId}/readings?{self.filter}', headers={'Authorization': f'Bearer {self.token}'})
+        if x.status_code == 200:
+            x = x.json()
+            if 'data' in x.keys():
+                return x['data']
+        return []
 
     def GET_runTicket(self,tankID,readingID):
         x = requests.get(f'https://api.iwell.info/v1/tanks/{tankID}/readings/{readingID}/run-tickets', headers={'Authorization': f'Bearer {self.token}'})
@@ -140,7 +150,7 @@ class IWell:
         return data
 
     def GET_wellMeters(self,wellID):
-        x = requests.get(f'https://api.iwell.info/v1/wells/{wellID}/meters?since={since}', headers={'Authorization': f'Bearer {self.token}'})
+        x = requests.get(f'https://api.iwell.info/v1/wells/{wellID}/meters?since={self.since}', headers={'Authorization': f'Bearer {self.token}'})
         data = x.json()['data']
         return data
     
@@ -148,7 +158,23 @@ class IWell:
         x = requests.get(f'https://api.iwell.info/v1/wells/{wellID}/meters/{meterID}/readings?since={since}', headers={'Authorization': f'Bearer {self.token}'})
         data = x.json()['data']
         return data
+
+    def GET_wellTanks(self,wellID):
+        x = requests.get(f'https://api.iwell.info/v1/wells/{wellID}/tanks?{self.filter}', headers={'Authorization': f'Bearer {self.token}'})
+        if x.status_code == 200:
+            x = x.json()
+            if 'data' in x.keys():
+                return x['data']
+        return []
     
+    def GET_tank(self,tankId):
+        x = requests.get(f'https://api.iwell.info/v1/tanks/{tankId}', headers={'Authorization': f'Bearer {self.token}'})
+        if x.status_code == 200:
+            x = x.json()
+            if 'data' in x.keys():
+                return x['data']
+        return []
+
 def fetch_historical_data():
     since = datetime.strptime(str('2024-5-01'), "%Y-%m-%d").timestamp()
     iw = IWell(field='SOUTH TEXAS',abbr='ST',since=since)
@@ -180,6 +206,38 @@ def fetch_historical_data():
     return
 
 if __name__ == "__main__":
-    since = datetime.strptime(str('2024-8-01'), "%Y-%m-%d").timestamp()
-    iw = IWell('','',since)
-       
+    since = datetime.strptime(str('2024-12-01'), "%Y-%m-%d").timestamp()
+    st = IWell('SOUTH TEXAS','ST',since)
+    m = st.GET_wellMeters(st.wells['J Beeler #1'])
+    res = defaultdict(list)
+    pipelinePressures = defaultdict(list)
+    for w,wId in st.wells.items():
+        #if w != 'Thompson Drip':continue
+        print(w)
+        #lp = st.GET_wellFieldValue(wId,4088)
+        #sales = st.GET_wellFieldValue(wId,4091)
+        #flare = st.GET_wellFieldValue(wId,4096)
+        fields = st.GET_wellFields(wId)
+        for f in fields:
+            fId = str(f['id'])
+            if (len(fId) == 4 and fId[0] == '7') or f['name'] == 'Pipeline Pressure':
+                pipelinePressures['Well'].append(w)
+                pipelinePressures['name'].append(f['name'])
+                pipelinePressures['Id'].append(f['id'])
+        continue
+        monitors = st.GET_wellMeters(wId)
+        print(monitors)
+        for monitor in monitors:
+            readings = st.GET_wellMetersReadings(wId,monitor['id'])
+            print(readings)
+            exit()
+            res['Well'].append(monitor['name'])
+
+            readable_date = datetime.fromtimestamp(monitor['updated_at']).strftime('%Y-%m-%d')
+            res['Last Reading'].append(readable_date)
+
+
+    pd.DataFrame(pipelinePressures).to_csv('pp.csv')
+    #pd.DataFrame(res).to_excel('iwellmodems.xlsx',index=False)
+
+    

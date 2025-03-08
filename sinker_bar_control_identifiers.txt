@@ -1,0 +1,121 @@
+Control Identifiers:
+
+Dialog - 'Sinker Bar Calculator'    (L2646, T393, R3255, B726)
+['Sinker Bar Calculator', 'Sinker Bar CalculatorDialog', 'Dialog']
+child_window(title="Sinker Bar Calculator", class_name="#32770")
+   | 
+   | Button - 'Calculate'    (L2982, T689, R3057, B712)
+   | ['CalculateButton', 'Button', 'Calculate', 'Button0', 'Button1']
+   | child_window(title="Calculate", class_name="Button")
+   | 
+   | Button - 'Cancel'    (L3167, T689, R3242, B712)
+   | ['CancelButton', 'Button2', 'Cancel']
+   | child_window(title="Cancel", class_name="Button")
+   | 
+   | Static - 'Pump Diameter (D)'    (L2688, T478, R2802, B491)
+   | ['Pump Diameter (D)', 'Static', 'Pump Diameter (D)Static', 'Static0', 'Static1']
+   | child_window(title="Pump Diameter (D)", class_name="Static")
+   | 
+   | Static - 'Pump Depth'    (L2688, T507, R2804, B536)
+   | ['Pump Depth', 'Pump DepthStatic', 'Static2']
+   | child_window(title="Pump Depth", class_name="Static")
+   | 
+   | Edit - '1.500'    (L2808, T473, R2868, B496)
+   | ['Edit', 'Pump Diameter (D)Edit', 'Edit0', 'Edit1']
+   | child_window(title="1.500", class_name="Edit")
+   | 
+   | Edit - '6,000'    (L2808, T511, R2868, B534)
+   | ['Edit2', 'Pump DepthEdit']
+   | child_window(title="6,000", class_name="Edit")
+   | 
+   | Edit - '1.00'    (L2808, T550, R2868, B573)
+   | ['Edit3', 'Fluid Specific GravityEdit']
+   | child_window(title="1.00", class_name="Edit")
+   | 
+   | Static - 'Fluid Specific Gravity'    (L2688, T546, R2804, B575)
+   | ['Fluid Specific GravityStatic', 'Fluid Specific Gravity', 'Static3']
+   | child_window(title="Fluid Specific Gravity", class_name="Static")
+   | 
+   | Button - 'Use Calculation'    (L3068, T689, R3157, B712)
+   | ['Button3', 'Use Calculation', 'Use CalculationButton']
+   | child_window(title="Use Calculation", class_name="Button")
+   | 
+   | Static - 'Sinker Bar Diameter'    (L2688, T590, R2802, B603)
+   | ['Static4', 'Sinker Bar Diameter', 'Sinker Bar DiameterStatic']
+   | child_window(title="Sinker Bar Diameter", class_name="Static")
+   | 
+   | Edit - '1.500'    (L2808, T585, R2868, B608)
+   | ['Edit4', 'Sinker Bar DiameterEdit']
+   | child_window(title="1.500", class_name="Edit")
+   | 
+   | Static - 'Sinker Bar Factor'    (L2996, T478, R3131, B491)
+   | ['Sinker Bar FactorStatic', 'Sinker Bar Factor', 'Static5']
+   | child_window(title="Sinker Bar Factor", class_name="Static")
+   | 
+   | Static - 'Required Weight'    (L2996, T515, R3128, B528)
+   | ['Required Weight', 'Required WeightStatic', 'Static6']
+   | child_window(title="Required Weight", class_name="Static")
+   | 
+   | Static - 'Required Length'    (L2996, T554, R3130, B567)
+   | ['Required Length', 'Required LengthStatic', 'Static7']
+   | child_window(title="Required Length", class_name="Static")
+   | 
+   | Static - '0.41465'    (L3101, T478, R3157, B491)
+   | ['0.41465Static', '0.41465', 'Static8']
+   | child_window(title="0.41465", class_name="Static")
+   | 
+   | Static - '1,078.1'    (L3101, T515, R3157, B528)
+   | ['Static9', '1,078.1Static', '1,078.1']
+   | child_window(title="1,078.1", class_name="Static")
+   | 
+   | Static - '205'    (L3101, T554, R3157, B567)
+   | ['205', '205Static', 'Static10']
+   | child_window(title="205", class_name="Static")
+   | 
+   | Static - 'Recommended Weight'    (L2996, T590, R3128, B603)
+   | ['Recommended WeightStatic', 'Recommended Weight', 'Static11']
+   | child_window(title="Recommended Weight", class_name="Static")
+   | 
+   | Static - '1,180.5'    (L3101, T590, R3157, B603)
+   | ['Static12', '1,180.5Static', '1,180.5']
+   | child_window(title="1,180.5", class_name="Static")
+   | 
+   | Static - 'Recommended Length'    (L2996, T624, R3131, B637)
+   | ['Recommended Length', 'Recommended LengthStatic', 'Static13']
+   | child_window(title="Recommended Length", class_name="Static")
+   | 
+   | Static - '225'    (L3101, T624, R3157, B637)
+   | ['225', '225Static', 'Static14']
+   | child_window(title="225", class_name="Static")
+   | 
+   | Static - 'in'    (L2880, T476, R2950, B491)
+   | ['in', 'inStatic', 'Static15', 'in0', 'in1', 'inStatic0', 'inStatic1']
+   | child_window(title="in", class_name="Static")
+   | 
+   | Static - 'ft'    (L2880, T514, R2950, B529)
+   | ['ft', 'ftStatic', 'Static16', 'ft0', 'ft1', 'ftStatic0', 'ftStatic1']
+   | child_window(title="ft", class_name="Static")
+   | 
+   | Static - 'Sp.Gr.H2O'    (L2880, T553, R2950, B568)
+   | ['Sp.Gr.H2OStatic', 'Sp.Gr.H2O', 'Static17']
+   | child_window(title="Sp.Gr.H2O", class_name="Static")
+   | 
+   | Static - 'in'    (L2880, T588, R2950, B603)
+   | ['in2', 'inStatic2', 'Static18']
+   | child_window(title="in", class_name="Static")
+   | 
+   | Static - 'lb'    (L3169, T514, R3239, B529)
+   | ['Static19', 'lb', 'lbStatic', 'lb0', 'lb1', 'lbStatic0', 'lbStatic1']
+   | child_window(title="lb", class_name="Static")
+   | 
+   | Static - 'ft'    (L3169, T553, R3239, B568)
+   | ['ft2', 'ftStatic2', 'Static20']
+   | child_window(title="ft", class_name="Static")
+   | 
+   | Static - 'lb'    (L3169, T589, R3239, B604)
+   | ['Static21', 'lb2', 'lbStatic2']
+   | child_window(title="lb", class_name="Static")
+   | 
+   | Static - 'ft'    (L3169, T623, R3239, B638)
+   | ['ft3', 'ftStatic3', 'Static22']
+   | child_window(title="ft", class_name="Static")

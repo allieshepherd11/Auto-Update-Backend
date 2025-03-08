@@ -7,99 +7,156 @@ from itertools import zip_longest
 from dateutil.relativedelta import relativedelta
 import json
 
+def format_prism_data(df:pd.DataFrame,wells=[]):
+    if wells == []: wells = sorted(set(df['WellName'].tolist()))
+    df = df.loc[df['WellName'].isin(wells)]
+    df['ProducingMonth'] = pd.to_datetime(df['ProducingMonth'], format='%m/%d/%Y').dt.strftime('%Y-%m-%d')
+    df = df[['WellName','ProducingMonth','LiquidsProd_BBL']]
+    df = df.rename(columns={'WellName':'Well Name','ProducingMonth':'Date','LiquidsProd_BBL':'Oil (BBLS)'})
+    return df.reset_index(drop=True)
+
+
+def groupMontlyProd(df:pd.DataFrame,name=''):
+    df['Date'] = pd.to_datetime(df['Date'])
+    df['Month'] = df['Date'].dt.month
+    df['Year'] = df['Date'].dt.year
+    grouped = df.groupby(['Year', 'Month'])
+
+    # sum up production from each month field
+    mo_sum = grouped.sum(['Oil (BBLS)', 'Gas (MCF)', 'Water (BBLS)']).reset_index()
+    mo_sum['Date'] = pd.to_datetime(mo_sum[['Year', 'Month']].assign(day=1))
+    mo_sum = mo_sum.drop('Year', axis=1)
+    mo_sum = mo_sum.drop('Month', axis=1)
+
+    mo_sum['Well Name'] = name
+    df_final = pd.concat([df, mo_sum])
+    df_final = df_final.sort_values('Date').reset_index(drop=True)
+    return df_final
 # RUN prodMonthly.py BEFORE THIS TO HAVE UPDATED DECLINE CURVES
 def main():
-    # List of every well w/ production data
-    df = pd.read_csv("data\prod\ST\moData.csv")
-    stWells = sorted(set(df['Well Name'].tolist()))
+    dfptnwells = pd.read_csv('data/decline/ptnWells.csv')
+    ptnwells = dfptnwells.loc[dfptnwells['Operator'] == 'CML Exploration']['Well'].tolist()
+    non_cml_wells = dfptnwells.loc[dfptnwells['Operator'] != 'CML Exploration']['Well'].tolist()
+
+    df = pd.read_csv("data/prod/ST/moData.csv")
+    dfet = pd.read_csv("data/prod/ET/moData.csv")
+    dfet['Well Name Key'] = dfet['Well Name'].str.replace("#", "", regex=False).str.replace(" ", "", regex=False).str.lower()
+    ptnwellskeys = [name.replace("#", "").replace(" ", "").lower() for name in ptnwells]
+    df_ptn_et_prod = dfet.loc[dfet['Well Name Key'].isin(ptnwellskeys)]
+
+    df_ptn_prod_non_cml = pd.read_csv('data/decline/ptnprod.csv')
+    df_ptn_prod_non_cml = format_prism_data(df_ptn_prod_non_cml,non_cml_wells)
+
+    df_ptn_et_prod = groupMontlyProd(df_ptn_et_prod,'Patterson East Texas')
+    ptnwells.append('Patterson East Texas')
     params = {}
     wells,errors = set(),set()
-    skip = ["Anna Louisa #1",'Blas Reyes #1','Kleimann #3 RE',"Palm #1","Russel #1","SOUTH TEXAS Total",
-            "Sugar Ranch #1","Thalmann #1 Re","Tortuga Unit B 2Re"]
+    skip = ["Anna Louisa #1",'Blas Reyes #1',"Palm #1","Russel #1","SOUTH TEXAS Total",
+            "Sugar Ranch #1","Tortuga Unit B 2Re","TJN Unit #1"]
+    skippnt = ['SANDIFER UNIT 1','SOCAUSKY/T-BAR-X 1']
+    stWells = sorted(set(df['Well Name'].tolist()))
+
     for well in stWells:
-        #try:
-        if well in skip:continue
-        print(well)
-        well_params = declineCurve(well,df.copy())
+        if well in skippnt:continue
+        if well != "Little 179 #1":continue
+        well_params = declineCurve(well,df)
 
         wells.add(well)
-        well = well.replace("#", "").replace(" ", "").lower()
         params[well] = well_params
-        if not well_params:errors.add(well)
-        #except:
-        #    print(f'ERROR {well}')
-        #    errors.add(well)
-    with open("../frontend/data/declineCurves/wells.json", 'w') as f:
+        print(well)
+        print(well_params)
+        exit()
+        if not well_params:
+            errors.add(well)
+    exit()
+    with open("../frontend/data/declinecurves/ET/wells.json", 'w') as f:
         json.dump(sorted(wells),f)
-    for k,v in params.copy().items():
-        params[k]['Well'] = k
-    params = {k:[v] for k,v in params.items()}
+
+    #for k,v in params.copy().items():
+    #    params[k]['Well'] = k
+    #params = {k:[v] for k,v in params.items()}
     
     print(params)
-    pd.DataFrame(params).to_json("../frontend/data/declineCurves/1params.json",orient='values')
+    print(type(params))
+    with open('../frontend/data/declinecurves/ET/1params.json', 'w') as f:
+        json.dump(params,f)
+    #pd.DataFrame(params).to_json("../frontend/data/declinecurves/ET/1params.json",orient='records')
     #----------------^^^^^--------------------------------------------------------------------#
     
 def declineCurve(name,df):
     # Drop unused columns, exclude data from the current month
-    df = df.loc[df['Well Name'] == name].drop(columns=['Gas (MCF)', 'Water (BBLS)', 'TP', 'CP'])
+    keyname = name.replace("#", "").replace(" ", "").lower()
+    print(keyname)
+    df['Well Name'] = df['Well Name'].str.replace("#", "", regex=False).str.replace(" ", "", regex=False).str.lower()
+    df = df.loc[df['Well Name'] == keyname]
+
+    try:
+        df = df.drop(columns=['Gas (MCF)', 'Water (BBLS)', 'TP', 'CP'])
+    except KeyError:
+        pass
+
     if len(df) == 0: return None
-    df_format = df.iloc[:-1]
+    #df_format = df.iloc[:-1]
+    df_format = df
     df_format.to_csv("dz.csv", index=False)
     df_data = pd.read_csv('dz.csv') # This csv needs to be kept to run
-
     # CREATE REAL DATA ARRAYS TO BE USED ON FINAL GRAPH
     # t_real = np.arange(len(df_data))
     t_real = df_data['Date'].values.tolist()
     q_real = df_data['Oil (BBLS)'].values.tolist()
 
 
-    # Any errors ran will return None to params
+    with open('data/decline/data/manualparams.json', 'r') as f:
+        maunalParams = json.load(f)
     
     # Check if well is in dManualEntries.csv
     dfManual = pd.read_csv('data/decline/declStartManual.csv')
     formatted_name = name.replace("#", "").replace(" ", "").lower()
-    if formatted_name in dfManual['Well Name'].tolist():
-        start_at_idx = dfManual.loc[dfManual['Well Name']==formatted_name, 'Start'].values[0]
+    print(formatted_name)
+    start_at_idx = None # Index such that everything before will be dropped
 
-    # If not manual entry, run algorithm
-    else:
-        start_at_idx = None # Index such that everything before will be dropped
-        mtc = 5 # Months_To_Check
-        r = 10 # Range of Months to check for the highest decreasing
-        # FOR LOOP SUMMARY
-        """
-        # Check the next 5 months and make sure they are not increasing, if not move on to next month
-        # Check the next 10 months from the month ^ loop ended on
-            # Check 1stmonth - 2ndmonth, if > highest_decrease, assign 2nd month as highest decrease
-            # Check 2nd mont - 3rd month, if > highest_decrease, assign 3rd month as highest decrease
-            # ...
-            # Check 9th month - 10th month, if > highest_decrease, assign 10th month as highest decrease
-        # Choose the one with the highest decrease (the month after the decrease happens)
-        # Delete everything before said month
-        """
-        # Loop through indexes in df_data
-        for i in range(len(df_data)-mtc):
-            tally = 0 # Set counter to 0
+    if name not in maunalParams:
+        if formatted_name in dfManual['Well Name'].tolist():
+            start_at_idx = dfManual.loc[dfManual['Well Name']==formatted_name, 'Start'].values[0]
 
-            # Check the next 4 months and make sure they are not increasing
-            for index, row in df_data.iloc[i:i+mtc].iterrows(): 
-                if index==len(df_data)-1: # Break if index is at the very end of the loop (1 case)
+        # If not manual entry, run algorithm
+        else:
+            mtc = 5 # Months_To_Check
+            r = 10 # Range of Months to check for the highest decreasing
+            # FOR LOOP SUMMARY
+            """
+            # Check the next 5 months and make sure they are not increasing, if not move on to next month
+            # Check the next 10 months from the month ^ loop ended on
+                # Check 1stmonth - 2ndmonth, if > highest_decrease, assign 2nd month as highest decrease
+                # Check 2nd mont - 3rd month, if > highest_decrease, assign 3rd month as highest decrease
+                # ...
+                # Check 9th month - 10th month, if > highest_decrease, assign 10th month as highest decrease
+            # Choose the one with the highest decrease (the month after the decrease happens)
+            # Delete everything before said month
+            """
+            # Loop through indexes in df_data
+            for i in range(len(df_data)-mtc):
+                tally = 0 # Set counter to 0
+
+                # Check the next 4 months and make sure they are not increasing
+                for index, row in df_data.iloc[i:i+mtc].iterrows(): 
+                    if index==len(df_data)-1: # Break if index is at the very end of the loop (1 case)
+                        break
+                    if row["Oil (BBLS)"] <= df_data.loc[index+1, "Oil (BBLS)"]: # If one of the values being checked is increasing (relative to value after), add a tally
+                        tally+=1
+                
+                if tally == 0: # If no values were found to be increasing, check the next 10 months for the one with the highest decrease
+                    highest_decrease = 0
+                    index = i
+
+                    # Loop starting at 0 until reaches range r
+                    for loop in range(r):
+                        if df_data.loc[i+loop, "Oil (BBLS)"] - df_data.loc[i+loop+1, "Oil (BBLS)"] > highest_decrease: # Check if row has the highest decrease
+                            highest_decrease = df_data.loc[i+loop, "Oil (BBLS)"] - df_data.loc[i+loop+1, "Oil (BBLS)"] # save highest decrease
+                            index = i + loop # save index of highest decrease (the row after the current one)
+                    # Assign start_at_idx to be the index after the for loop
+                    start_at_idx = index
                     break
-                if row["Oil (BBLS)"] <= df_data.loc[index+1, "Oil (BBLS)"]: # If one of the values being checked is increasing (relative to value after), add a tally
-                    tally+=1
-            
-            if tally == 0: # If no values were found to be increasing, check the next 10 months for the one with the highest decrease
-                highest_decrease = 0
-                index = i
-
-                # Loop starting at 0 until reaches range r
-                for loop in range(r):
-                    if df_data.loc[i+loop, "Oil (BBLS)"] - df_data.loc[i+loop+1, "Oil (BBLS)"] > highest_decrease: # Check if row has the highest decrease
-                        highest_decrease = df_data.loc[i+loop, "Oil (BBLS)"] - df_data.loc[i+loop+1, "Oil (BBLS)"] # save highest decrease
-                        index = i + loop # save index of highest decrease (the row after the current one)
-                # Assign start_at_idx to be the index after the for loop
-                start_at_idx = index
-                break
     
 
     # Check if well is in dEndList.csv, true: drop the data after given end_index
@@ -123,13 +180,19 @@ def declineCurve(name,df):
     qi = q[0]
 
     # Curve fit to hyperbolicEq, using t, q, and initial_estimate
-    initial_estimate = [qi, .8, .4]
-    try:
-        popt, pcov = curve_fit(hyperbolicEq, t, q, p0=initial_estimate)
-    except RuntimeError:
-        return None
-    qi_est, b_est, Di_est = popt
-
+   
+    if name not in maunalParams:
+        initial_estimate = [qi, .8, .4]
+        try:
+            popt, pcov = curve_fit(hyperbolicEq, t, q, p0=initial_estimate)
+        except RuntimeError:
+            return None
+        qi_est, b_est, Di_est = popt
+    else:
+        book = maunalParams[name]
+        qi_est, b_est, Di_est = book['qi'],book['b'],book['di']
+    print(b_est, Di_est/12)
+    exit()
     extr_mo = 100 # extrapolated months
     t_model = np.linspace(min(t), max(t)+extr_mo, 1+max(t)+extr_mo)  # Array of time indexes (start, stop, # of data points)
     q_model = hyperbolicEq(t_model, qi_est, b_est, Di_est) # Generate the model curve from best fit data
@@ -161,7 +224,7 @@ def declineCurve(name,df):
     dict_final = {'t': t_real, 'q': q_real, 't_model': dates_model, 'q_model': q_model}
     df_final = pd.DataFrame(dict_final)
     # FILE DESTINATION, CHANGE TO FIT YOUR LOCAL GITHUB FOLDER. File name: "{formatted_name}.csv"
-    df_final.to_csv(f"../frontend/data/declineCurves/{formatted_name}.csv", index=False)
+    df_final.to_csv(f"../frontend/data/declinecurves/ET/{formatted_name}.csv", index=False)
     df_final.to_csv(f"./data/decline/data/{formatted_name}.csv", index=False)
 
     #------------------^^^^^^^----------------------------------------------------------------#
@@ -172,7 +235,12 @@ def declineCurve(name,df):
     q_forcast = df_final.loc[df_final['t_model'] > last_real_date,'q_model'].sum()
     eur = df_final['q'].sum() + q_forcast
     # RETURNS 'PARAMATERS'
-    return {"eur":eur,"qi":qi_est, "D":Di_est, "b":b_est, "extr_mo":extr_mo, "q_sum":q_eco, "qm_sum":qm_eco, "future_prod":fp_eco, "eco_limit":ecoLimit, "end_index":end_index, "model_eco_limit":modelEcoLimit, "np_value": npVal}
+    params = {"Well":name,"eur":eur,"qi":qi_est, "D":Di_est, "b":b_est, "extr_mo":extr_mo, "q_sum":q_eco, "qm_sum":qm_eco, "future_prod":fp_eco, "eco_limit":ecoLimit, "end_index":end_index, "model_eco_limit":modelEcoLimit, "np_value": npVal}
+    params = {
+    k: (int(v) if isinstance(v, (int, float, np.integer, np.floating)) and not (np.isinf(v) or np.isnan(v)) else str(v))
+    for k, v in params.items()
+    }
+    return params
     
 def hyperbolicEq(t, qi, b, Di):
     return qi/(1+b*Di*t)**(1/b)

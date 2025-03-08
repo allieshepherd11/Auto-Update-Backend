@@ -1,0 +1,32 @@
+,Well Name,Date,Oil (BBLS),Gas (MCF),Water (BBLS),TP,CP,Comments
+0,CL Moore 6,2018-08-31,5.01,0,16.0,0,0,#6 in testtp 300# cp 170 #
+1,CL Moore 6,2018-08-30,0.0,0,0.0,0,0,#6
+2,CL Moore 6,2018-08-29,1.67,0,2.0,0,0,#6 in test
+3,CL Moore 6,2018-08-28,0.0,0,0.0,0,0,"# 6 txt, 300/170 Cas- 2.32/0"
+4,CL Moore 6,2018-08-27,0.0,0,0.0,0,0,#6 in test
+5,CL Moore 6,2018-08-26,0.0,0,0.0,0,0,#6 in test
+6,CL Moore 6,2018-08-25,0.0,0,0.0,0,0,#6 tst- 0/30 from test
+7,CL Moore 6,2018-08-24,0.0,0,0.0,0,0,
+8,CL Moore 6,2018-08-23,0.0,0,28.0,0,0,#6 test
+9,CL Moore 6,2018-08-22,0.0,0,0.0,0,0,#6 in test
+10,CL Moore 6,2018-08-21,0.0,0,7.0,0,0,#6 in test
+11,CL Moore 6,2018-08-20,0.0,0,5.0,0,0,"#6 tat, casing-3.48/2.32/125psi"
+12,CL Moore 6,2018-08-19,0.0,0,0.0,0,0,#6 in test300 tbg 120 CSg
+13,CL Moore 6,2018-08-18,0.0,388,102.0,0,0,#6 in test
+14,CL Moore 6,2018-08-17,1.67,0,108.0,0,0,# 6 in test
+15,CL Moore 6,2018-08-16,0.0,0,5.0,0,0,# 6 in test
+16,CL Moore 6,2018-08-15,0.0,0,4.76,0,0,#6 in test
+17,CL Moore 6,2018-08-14,5.01,0,128.33,0,0,#6 in test
+18,CL Moore 6,2018-08-13,5.01,0,131.67,0,0,#6 in test
+19,CL Moore 6,2018-08-12,5.01,0,108.37,0,0,#6 in test 300/130
+20,CL Moore 6,2018-08-11,5.01,0,173.68,0,0,# 6 in test
+21,CL Moore 6,2018-08-10,1.67,0,-10.3,0,0,#6 in test
+22,CL Moore 6,2018-08-09,6.68,0,160.32,0,0,#6 in test
+23,CL Moore 6,2018-08-08,5.01,0,180.0,0,0,#6 in test
+24,CL Moore 6,2018-08-07,8.35,0,180.0,0,0,# 6 in test
+25,CL Moore 6,2018-08-06,0.0,0,0.0,0,0,No test
+26,CL Moore 6,2018-08-05,8.35,0,0.0,0,0,Put 8.35 bbls oil from 210 tank at #7#6 in test
+27,CL Moore 6,2018-08-04,6.68,0,172.0,0,0,#6 in test
+28,CL Moore 6,2018-08-03,5.01,0,17.0,0,0,#6 in test water counter not working right
+29,CL Moore 6,2018-08-02,3.34,0,75.0,0,0,6 in test
+30,CL Moore 6,2018-08-01,5.01,0,51.0,0,0,

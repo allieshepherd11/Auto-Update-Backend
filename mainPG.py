@@ -1,19 +1,23 @@
 import pandas as pd
+import numpy as np
 import openpyxl
+import xlwings as xw
 from datetime import datetime
 import time
 import json
 from src.Modules.Report import ProdReport
-from src.Modules.Field import Field
+from src.Modules.Field import Field,generateMnthArray
 import webbrowser
 import numpy as np
 import re
 import src.Modules.Tanks as Tanks
 from collections import defaultdict
 from src.Modules.OutlookBot import ReportBot
+import shutil
+import os
+from src.Modules.Logger import Logger
 
-
-def updateApp(field,importProd=True):
+def updateApp(field,importProd=True,takeToday=False):
     print(field)
     abbr = ''.join([w[0] for w in field.split(' ')]).upper()
     dtype = {'Oil (BBLS)': float, 'Water (BBLS)': float, 'Gas (MCF)': float, 'TP': str, 'CP': str, 'Comments': str}
@@ -21,11 +25,10 @@ def updateApp(field,importProd=True):
     df.Date = pd.to_datetime(df.Date)
     df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
     start = str(df.iloc[0]['Date'])[:10] # Gets the most recent date from the dataframe
-    
     ##Import recent data from iwell
     ##
     if importProd:
-        fld = Field(field,abbr,start)
+        fld = Field(field=field,abbr=abbr,start=start,takeToday=takeToday)
         dfImport,updates,tank_levels,dfGasImport = fld.importData()
         with open(f"data/prod/{abbr}/batteries.json",'w') as f: json.dump(tank_levels,f)
         for i in updates:
@@ -43,6 +46,8 @@ def updateApp(field,importProd=True):
             df['Flow Rate Flare'] = df['Flow Rate Flare'].combine_first(df['Flow Rate Flare_y'])
             df.drop(['Flow Rate Sales_y', 'Flow Rate Flare_y','Sales Pressure_y'], axis=1, inplace=True)
             df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
+            #print(df.loc[df['Well Name'] == 'Aaron #1'][:20])
+            #exit()
 
     df['Oil (BBLS)'] = pd.to_numeric(df['Oil (BBLS)'], errors='coerce')
 
@@ -69,7 +74,7 @@ def updateApp(field,importProd=True):
     
     with open("data/misc/wnMap.json",'r') as f: wnMap = json.load(f)
     for k,v in wnMap.items(): df.loc[df['Well Name'] == k,'Well Name'] = v
-
+    
     df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
     df.to_csv(f'data/prod/{abbr}/data.csv', index=False)
     if abbr == 'ET': df.to_csv('data/prod/WB/data.csv', index=False)
@@ -83,9 +88,7 @@ def updateApp(field,importProd=True):
 
     dfTotal = dfoiltotal.merge(dfwatertotal, on='Date').merge(dfgastotal, on='Date')
     dfTotal['Well Name'],dfTotal['TP'],dfTotal['CP'],dfTotal['Comments'] = title.title(),"","",""
-    
     df = pd.concat([df, dfTotal])
-
     #group entries
     groups = {"Group Marpick Comp": ['Lander #1','RAB #1','RAB #2','RAB #3','Chad #1','Kiley #1','JJ #1','J Beeler #1','Aaron #1','Pfeiffer Byrd #1',
                                      'Jessica #1','Pickwill #1','Marpick #1','Gail #1','Marguerite #1','Eileen #1','Richard #1','Beeler Ranch #1','Annpick #1'], 
@@ -96,7 +99,12 @@ def updateApp(field,importProd=True):
             "Group Molak Comp":{
                 "Barrier #1","Charles B #1","Molak #1","Bond #1","Bermuda #1","Blas Reyes #1","Big Sonny #1","Russell #1","Dillard #1"
                 ,"Sugarland #1","Trotter #1","Ruth #1","Dunlap #1","Verna #1","La Rosita #1 RE","Richardson #1",
-            } }
+            },
+            "Group Sour Wells":{
+                "Aaron #1","Beeler Ranch #1","Carolyn #1","Chad #1","Gail #1","J Beeler #1","JIC #1","JJ #1","Jospeh #1","Kiley #1","Kliemann #1",
+                "Lamb #1","Lander #1","Marrs #1","Parkway #1 RE","Pecan Grove #1","RAB #1", "RAB #2","RAB #3","Whittington #1"
+            }
+            }
     if abbr == 'ST':
         for groupName,wells in groups.items():
             dfgroup = df[df['Well Name'].isin(wells)]
@@ -113,15 +121,15 @@ def updateApp(field,importProd=True):
 
             df = pd.concat([df, dfTotal])
 
-
     dfoil = df.groupby(['Well Name'])['Oil (BBLS)'].sum().divide(1000).astype(float).reset_index().round(1)
     dfwater = df.groupby(['Well Name'])['Water (BBLS)'].sum().divide(1000).astype(float).reset_index().round(1)
     dfgas = df.groupby(['Well Name'])['Gas (MCF)'].sum().divide(1000).astype(int).reset_index().round(1)
     dfsum = dfoil.merge(dfwater, on='Well Name').merge(dfgas, on='Well Name')
-    dfsum.loc[len(dfsum)] = dfsum[['Oil (BBLS)','Water (BBLS)','Gas (MCF)']].sum()
-    dfsum.loc[len(dfsum)-1,'Well Name'] = f'{abbr} Total'
-
-    
+    #dfsum.loc[len(dfsum)] = dfsum[['Oil (BBLS)','Water (BBLS)','Gas (MCF)']].sum()
+    #dfsum.loc[len(dfsum)-1,'Well Name'] = f'{abbr} Total'
+    #print(dfsum)
+    #print(dfsum.loc[dfsum['Well Name'] == 'South Texas Total'].iloc[0])
+    #exit()
 
     df['Total Fluid'] = df['Oil (BBLS)'] + df['Water (BBLS)']
     df = df.sort_values(['Date', 'Well Name'], ascending = [True , True]).reset_index(drop=True)
@@ -130,6 +138,9 @@ def updateApp(field,importProd=True):
     df['30DMA Oil'] = df.groupby('Well Name')['Oil (BBLS)'].rolling(window=30).mean().reset_index(level=0, drop=True).round(1)
     df['Accum Oil'] = df.groupby('Well Name')['Oil (BBLS)'].cumsum()
 
+    df['WC'] = df['Water (BBLS)'] / df['Total Fluid']
+    df['7DMA WC'] = df.groupby('Well Name')['WC'].rolling(window=7,min_periods=1).mean().reset_index(level=0, drop=True).round(3)
+    df['7DMA WC'] = df['7DMA WC']*100
     df = df.sort_values(['Date', 'Well Name'], ascending = [False , True]).reset_index(drop=True)
     # ADD DATE COLUMN FOR X AXIS USE (DateYAxis) & CHANGING DATATYPE TO Object
     df['DateYAxis'] =  df['Date']
@@ -140,7 +151,7 @@ def updateApp(field,importProd=True):
     df['Date'] = df['Date'].dt.strftime('%B %d, %Y')
     
     colsOrder = ["Well Name", "Date", "Oil (BBLS)","Gas (MCF)", "Water (BBLS)", "TP", "CP", "Comments",
-                 "DateYAxis","Total Fluid","7DMA Oil","7DMA Fluid","30DMA Oil","Accum Oil"]
+                 "DateYAxis","Total Fluid","7DMA Oil","7DMA Fluid","30DMA Oil","Accum Oil",'WC','7DMA WC']
     if abbr == 'ST':
         colsOrder.extend(["Sales Pressure","Flow Rate Sales","Flow Rate Flare"])
 
@@ -180,6 +191,7 @@ def updateApp(field,importProd=True):
     
     mnthlyProd(field)
     move(abbr)
+    formatStackedGraph(abbr)
     return
 
 def parse_schedule(df_prod:pd.DataFrame) -> pd.DataFrame:
@@ -204,7 +216,7 @@ def parse_schedule(df_prod:pd.DataFrame) -> pd.DataFrame:
 def analyze(fieldAbbr) -> pd.DataFrame:
     df = pd.read_json(f'data/prod/{fieldAbbr}/data.json')
     cols = ["Well Name", "Date", "Oil (BBLS)","Gas (MCF)", "Water (BBLS)", "TP", "CP", "Comments","Datetime","Total Fluid","7DMA Oil","7DMA Fluid","30DMA Oil"
-            ,"Line Pressure","Sales Rate","Flare Rate"]
+            ,"Accum Oil","WC","WC 7DMA","Line Pressure","Sales Rate","Flare Rate"]
     df = df.rename(columns={idx:el for idx,el in enumerate(cols)})
     past_days = df.sort_values('Datetime', ascending=False)['Datetime'].tolist()
     #df['MA Ratio Oil'] = df['7DMA Oil'] / df['30DMA Oil']
@@ -264,59 +276,104 @@ def write_formations():
     with open('data/misc/formations.json','w') as f:
         json.dump(dd,f)
 
-def update_Fls(importPath='./data/misc/ST/fl_import_10-17.csv'):
+def update_STprod(importPath):
     dfimport = pd.read_csv(importPath)
-
-    df = pd.read_csv('./data/misc/ST/fls.csv')
+    df = pd.read_csv('./data/misc/ST/tam.csv')
     df = pd.concat([df,dfimport]).reset_index(drop=True)
-    df.to_csv('fls.csv',index=False)
-
-    df = df[(~df['Distance to Liquid (ft)'].isna()) & (df['Well State'] == 'Producing')].reset_index(drop=True)
+    df.to_csv('./data/misc/ST/tam.csv',index=False)
+    print(df)
     df['Date'] = pd.to_datetime(df['Date'] + ' ' + df['Time'],format='mixed')
 
-    df.to_json(f'../frontend/data/ST/fls.json', orient='values', date_format='iso')
+    df_fl = df[(~df['Distance to Liquid (ft)'].isna()) & (df['Well State'] == 'Producing')].reset_index(drop=True)
+    df_dyno = df[(~df['Strokes Per Minute (SPM)'].isna())].reset_index(drop=True)
 
-    dfrecent = df.loc[df.groupby('Well Name')['Date'].idxmax()]
+    df_fl.to_json(f'../frontend/data/ST/fls.json', orient='values', date_format='iso')
+
+    df_fl = df_fl.loc[df_fl.groupby('Well Name')['Date'].idxmax()]
+    df_dyno = df_dyno.loc[df_dyno.groupby('Well Name')['Date'].idxmax()]
 
     file_path = "C:/Users/plaisancem/CML Exploration/Travis Wadman - CML/STprod.xlsx"
     wb = openpyxl.load_workbook(file_path)
-    sheet = wb['Prod']  
-
+    sheet_stprod = wb['Prod']  
+   
     dfstprod = pd.read_excel(file_path)
-    dfstprod['Key'] = dfstprod['Well Name'].apply(lambda x: x.lower().replace('#', '').replace(' ', ''))
+    def well_name_key(x):
+        if x == x:
+            x=x.lower().replace('#', '').replace(' ', '')
+        return x
+    df_fl['Well Name'] = df_fl['Well Name'].apply(lambda x: well_name_key(x))
+    df_dyno['Well Name'] = df_dyno['Well Name'].apply(lambda x: well_name_key(x))
+    dfstprod['Key'] = dfstprod['Well Name'].apply(lambda x: well_name_key(x))
 
-    for _, row in dfrecent.iterrows():
-        row_key = row['Well Name'].lower().replace('#', '').replace(' ', '')
-        mask = row_key == dfstprod['Key']
-        #if not mask.any():
-        #    print(row['Well Name'])
+    
+    for _, row in df_fl.iterrows():
+        mask = row['Well Name'] == dfstprod['Key']
         dfstprod.loc[mask, ['FL Date', 'GFLAP']] = row['Date'], row['Gas Free Above Pump (ft)']
+    
+    for _, row in df_dyno.iterrows():
+            mask = row['Well Name'] == dfstprod['Key']
+            #if not mask.any():
+            #    print(row['Well Name'])
+            dfstprod.loc[mask, ['SPM', 'DH SL', 'EPT']] = row['Strokes Per Minute (SPM)'], \
+                                                    row['Maximum Plunger Stroke (in)'], row['Effective Plunger Travel (in)']
 
     dfstprod['FL Date'] = pd.to_datetime(dfstprod['FL Date']).dt.date
 
     for idx, row in dfstprod.iterrows():
-        well_name_col = 'A'  # Column for 'Well Name'
-        fl_date_col = 'K'    # Column for 'FL Date'
-        gflap_col = 'L'      # Column for 'GFLAP'
+        well_name_col = 'A' 
+        fl_date_col = 'K'   
+        gflap_col = 'L'      
+        spm_col = 'E'
+        dhsl_col = 'F'
+        ept_col = 'H'
 
-        well_name_cell = sheet[f'{well_name_col}{idx + 2}']  # Header row
-        fl_date_cell = sheet[f'{fl_date_col}{idx + 2}']
-        gflap_cell = sheet[f'{gflap_col}{idx + 2}']
+        well_name_cell = sheet_stprod[f'{well_name_col}{idx + 2}']  # Header row
+        fl_date_cell = sheet_stprod[f'{fl_date_col}{idx + 2}']
+        gflap_cell = sheet_stprod[f'{gflap_col}{idx + 2}']
+
+        spm_cell = sheet_stprod[f'{spm_col}{idx + 2}']
+        dhsl_cell = sheet_stprod[f'{dhsl_col}{idx + 2}']
+        ept_cell = sheet_stprod[f'{ept_col}{idx + 2}']
+
 
         if well_name_cell.value == row['Well Name']:
             fl_date_cell.value = row['FL Date']
             gflap_cell.value = row['GFLAP']
+            spm_cell.value = row['SPM']
+            dhsl_cell.value = row['DH SL']
+            ept_cell.value = row['EPT']
+
 
     wb.save(file_path)
 
 def update_pumpInfo(abbr):
-    #df = pd.read_excel("C:/Users/plaisancem/OneDrive - CML Exploration/CML/STprod.xlsx")
-    if abbr == 'ST':
-        update_Fls()
-        df = pd.read_excel("C:/Users/plaisancem/CML Exploration/Travis Wadman - CML/STprod.xlsx")
-    elif abbr == 'ET':
-        df = pd.read_excel("C:/Users/plaisancem/CML Exploration/Travis Wadman - CML/East Texas/East Texas Production Tracker.xlsx")
+    if abbr == 'ST':update_STprod(importPath='./data/misc/ST/TAM_update_2025-02-17.csv')
+    path = "C:/Users/plaisancem/CML Exploration/Travis Wadman - CML/STprod.xlsx" if abbr == 'ST' \
+        else "C:/Users/plaisancem/CML Exploration/Travis Wadman - CML/East Texas/East Texas Production Tracker.xlsx"
+    tempPath = "C:/Users/plaisancem/Downloads/prod-copy.xlsx"
+    shutil.copyfile(path, tempPath)
+    df = pd.read_excel(tempPath)
+    
+    if os.path.exists(tempPath):
+        os.remove(tempPath)
 
+    def c(diam):
+        if diam == 2:
+            return .466
+        elif diam == 1.75:
+            return .357
+        elif diam == 1.5:
+            return .262
+        elif diam == 1.25:
+            return .182
+        elif diam == 1.06:
+            return .132
+        elif diam == 2.25:
+            return .59
+
+    diacol = 'Plunger Diameter (in)' if abbr == 'ST' else 'Pump Diameter'
+    df['C'] = df[diacol].apply(lambda x: c(x))
+    df['Ideal bfpd'] = round(df['DH SL']*df['SPM']*df['C'],0)
     df = df.drop([col for col in df.columns if col not in ['Well Name','Last WO Date','C','SPM','DH SL','Ideal bfpd','Pump Depth','GFLAP','FL Date','Inc']],axis=1)
     df['Last WO Date'] =  pd.to_datetime(df['Last WO Date'])
     df['FL Date'] =  pd.to_datetime(df['FL Date'])
@@ -327,6 +384,7 @@ def update_pumpInfo(abbr):
     df['FL Date'] = df['FL Date'].dt.strftime('%Y-%m-%d')
     if abbr == 'ST':
         df.loc[len(df)] = {'Well Name':'Tortuga Unit B 2Re','GFLAP':1626,'FL Date':'2024-08-18'}
+    print(df['Well Name'].tolist())
     df.to_json(f'data/prod/{abbr}/pumpinfo.json',orient='records',date_format='iso')
     df.to_json(f'../frontend/data/{abbr}/pumpInfo.json',orient='records',date_format='iso')
 
@@ -484,25 +542,52 @@ def meterStatus():
     for well in wells:
         dfWell = df.loc[df['Well Name'] == well].reset_index()
         print(dfWell)
-        exit()
+    return
+
+def formatStackedGraph(abbr):
+    df = pd.read_csv(f'data/prod/{abbr}/data.csv')
+    first_prod = {}
+    data_formated = {}
+    for well,df_well in df.groupby('Well Name'):
+        
+        data_formated[well] = {
+            "x":df_well['Date'].tolist(),
+            "oil":df_well['Oil (BBLS)'].tolist()
+        }
+        first_prod[well] = pd.to_datetime(df_well['Date']).min().strftime('%Y-%m-%d')
+
+    with open(f'C:/Users/plaisancem/Documents/Dev/Apps/Prod/frontend/data/{abbr}/stackedGraph.json', 'w') as f:
+        json.dump(data_formated,f)
+    with open(f'C:/Users/plaisancem/Documents/Dev/Apps/Prod/frontend/data/{abbr}/firstProdDate.json', 'w') as f:
+        json.dump(first_prod,f)
+    return
+
+def automated_report(recipient,wells,reportType='client',attachments_type=['pdf','csv']):
+    if reportType == 'client' and wells == 'all':
+        print('really?')
+        return
+    bot = ReportBot(recipient=recipient,wells=wells,reportType=reportType)
+    paths,day = bot.genReport()
+    attachments = []
+    for path in paths:
+        for att_type in attachments_type:
+            attachments.append(rf"C:\Users\plaisancem\Documents\Dev\Apps\Prod\backend\{path[att_type]}")
+    email_body = bot.emailBody()
+    report_title = f'CML Daily Production {day}' if reportType == 'cmldaily' else f'{day} Report'
+    bot.sendEmail(to_address=recipient,
+        subject=report_title,
+        body=email_body,
+        attachments_paths=attachments,
+        bcc_address='PlaisanceM@cmlexp.com'
+        )
     return
 
 if __name__ == '__main__':
-    update_pumpInfo('ST')
-    exit()
-    #for idx,f in enumerate(['SOUTH TEXAS','EAST TEXAS','Gulf Coast','West TX','New Mexico']):
-    #    updateApp(field=f,importProd=1)
+    #automated_report(recipient='PlaisanceM@cmlexp.com',wells=['Kleimann #3 RE'],attachments_type=['pdf','csv'],reportType='client')
+    #exit()
+    automated_report(recipient='PlaisanceM@cmlexp.com',wells='all',attachments_type=['pdf'],reportType='cmldaily')
 
-    receipent = 'PlaisanceM@cmlexp.com'
-    wells = ['Kleimann #3 RE']
-    bot = ReportBot(recipient=receipent,wells=wells)
-    relativePaths,reportTitle = bot.genReport()
+    exit()
+    for idx,f in enumerate(['SOUTH TEXAS','EAST TEXAS','Gulf Coast','West TX','New Mexico']):
+        updateApp(field=f,importProd=1,takeToday=0)
     
-    attachments = [rf"C:\Users\plaisancem\Documents\Dev\Apps\Prod\backend\{relativePaths['pdf']}",
-                   rf"C:\Users\plaisancem\Documents\Dev\Apps\Prod\backend\{relativePaths['csv']}"]
-    bot.sendEmail(to_address=receipent,
-                  subject=reportTitle,
-                  body=f'Automated Report for {receipent.split('@')[-1].split('.')[0].upper()}\n\nThank you\nMatthew Plaisance\n512-971-9722\nCML Exploration LLC',
-                  attachments_paths=attachments,
-                  bcc_address='PlaisanceM@cmlexp.com'
-                  )

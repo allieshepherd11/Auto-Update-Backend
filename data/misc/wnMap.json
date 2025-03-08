@@ -22,7 +22,8 @@
     "Dial #1 St": "Dial #1 ST",
     "Ra #1": "RA #1",
     "Ck #1": "CK #1",
-    "Clary Rb #1": "Clary RB #1",
+    "Clary Rb #1": "RB Clary #1",
+    "Rb Clary #1":"RB Clary #1",
     "Mcduffie Unit #1": "McDuffie Unit #1",
     "Mt Unit #1H": "MT Unit #1H",
     "Ws #1": "WS #1",
@@ -44,6 +45,10 @@
     "La Rosita #1 Re": "La Rosita #1 RE",
     "Beeler #16 Re":"Beeler #16 RE",
     "Kleimann #3 Re":"Kleimann #3 RE",
-    "Kleimann #3":"Kleimann #3 RE"
-
+    "Kleimann #3":"Kleimann #3 RE",
+    "Thalmann #1 Re":"Thalmann #1 RE",
+    "Parkway #1":"Parkway #1 RE",
+    "Parkway #1 Re":"Parkway #1 RE",
+    "Tjn Unit #1":"TJN Unit #1",
+    "Pfeiffer #1":"Pfeiffer #1 RE"
 }

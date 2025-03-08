@@ -1,6 +1,0 @@
-﻿Date,Time,Well Name,Seating Nipple Depth (ft),Plunger Diameter (in),ACU Acoustic Velocity (ft/s),ACU Tubing Pressure (psi (g)),Back Pressure (psi (g)),Back Pressure on Formation Due to Liquid Loading (psi (g)),Gas Free Above Pump (ft),Fluid Above Pump (ft),Distance to Liquid (ft),Well State,ACU Casing Pressure (psi (g))
-10/16/2024,02:28:10 PM,Bruce Weaver #1,6845,1.250,1128,,,123.4,280,866,5914,Producing,18.7
-10/16/2024,02:52:10 PM,Bruce Weaver #2 RE,6368,1.500,,,,,,,,,
-10/16/2024,03:04:57 PM,Bruce Weaver #2 RE,6368,1.500,1046,,,86.6,88,304,5972,Producing,36.4
-10/16/2024,12:07:53 PM,Pfeiffer-Byrd #1,6461,1.750,,,,,,,,,
-10/16/2024,12:22:34 PM,Pfeiffer-Byrd #1,6461,1.750,1022,,,122.2,341,392,5920,Producing,21.3

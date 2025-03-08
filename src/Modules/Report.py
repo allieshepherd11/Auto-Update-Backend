@@ -1,10 +1,22 @@
 import pandas as pd
 import numpy as np
 from fpdf import FPDF
-import webbrowser
 import datetime
 import json
 import time
+import unicodedata
+import warnings
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+import pandas as pd
+from docx import Document
+import datetime as dt
+import os
+import glob
+
+
+warnings.filterwarnings('ignore')
+
 
 class ProdReport():
     def __init__(self, field:str,title:str,clientName=None,wells=None,day=None):
@@ -13,13 +25,13 @@ class ProdReport():
         self.clientName = clientName
         self.title = title.title().replace(' Re ',' RE ')
         self.dtype = {'Oil (BBLS)': float, 'Water (BBLS)': float, 'Gas (MCF)': float, 'TP': float, 'CP': float, 'Comments': str}
-        self.df = pd.read_csv(f'data\\prod\\{self.field}\\data.csv', dtype=self.dtype)
+        self.df = pd.read_csv(f'data/prod/{self.field}/data.csv', dtype=self.dtype)
         self.day = day if day is not None else self.df['Date'][0]
         self.dateTitle = datetime.datetime.strptime(self.day, "%Y-%m-%d").strftime("%b %d")
         self.dayFormat = datetime.datetime.strptime(self.day, "%Y-%m-%d").strftime("%m-%d-%Y")
         if field == 'WT' or field == 'NM':self.df = self.df.drop(['CP'], axis=1)
         if field == 'ET' or field == 'WB': 
-            with open('data\prod\WB\wells.json', 'r') as f: wells:dict = json.loads(f.read())
+            with open('data/prod/WB/wells.json', 'r') as f: wells:dict = json.loads(f.read())
             ww = [w.lower() for w in wells.keys()]
             mask = self.df['Well Name'].str.lower().isin(ww)
             if self.field == 'ET': mask = ~mask
@@ -54,7 +66,7 @@ class ProdReport():
 
             df['Date'] = df['Date'].dt.date
 
-        df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
+            df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
         
         df = df._append(df[['Oil (BBLS)', 'Gas (MCF)', 'Water (BBLS)']].sum(),ignore_index=True)
         df.iloc[len(df)-1,df.columns.get_loc('Well Name')] = 'Total'
@@ -70,6 +82,9 @@ class ProdReport():
         df = df.replace(pd.NA,np.nan)
         return pd.DataFrame(df.fillna(' ')),widths
     
+    def clean_text(self,text):
+        return unicodedata.normalize('NFKD', text).encode('utf-8', 'ignore').decode('utf-8')
+
     def workoutWidth(self, df:pd.DataFrame):
         pdf = FPDF()
         pdf.set_font("Arial", size=7)
@@ -160,9 +175,8 @@ class ProdReport():
             
             for col in df.columns:
                 if col == 'dbl':continue
-                cell_value = str(row[col]).replace("’","")
+                cell_value = str(row[col]).encode("latin-1", "ignore").decode("latin-1")
                 cell_width = col_widths[col]['width']
-                
                 if col == 'Comments':
                     cell_width = page_width - col_widths[k]['pos_end'] + pdf.l_margin
                     comm_width = pdf.get_string_width(cell_value)
@@ -204,17 +218,24 @@ class ProdReport():
 
         pathtar = self.clientName if self.clientName else self.field
         reportTitle = f"{self.title} - {self.dateTitle}"
-        pdf_path = f'data/prod/reports/{pathtar}/{reportTitle}.pdf'
-        csv_path = f'data/prod/reports/{pathtar}/{reportTitle}.csv'
+        folder_path = 'data/prod/reports/dailyreports/'
+
+        files_to_rm = glob.glob(os.path.join(folder_path, f"*{self.title}*"))
+        for file in files_to_rm:
+            try:
+                os.remove(file)
+                print(f"Deleted: {file}")
+            except Exception as e:
+                print(f"Error deleting {file}: {e}")
+
+        pdf_path = f'{folder_path+reportTitle}.pdf'
+        csv_path = f'{folder_path+reportTitle}.csv'
         df.to_csv(csv_path,index=False)
         pdf.output(pdf_path,'F')  
 
-        return {'pdf':pdf_path,'csv':csv_path},reportTitle
-
-def emailBody(date=None):
-    from docx import Document
-    import datetime as dt
-
+        return {'pdf':pdf_path,'csv':csv_path,'title':reportTitle}
+    
+def totals_df(date=None):
     fields = ['ST','ET','WB','WT','NM','GC']
     area_map = {'ST':'SOUTH TEXAS','ET':'EAST TEXAS','WB':'EAST TEXAS WB',
                 'WT':'WEST TEXAS','NM':'NEW MEXICO','GC':'GULF COAST'}
@@ -225,7 +246,7 @@ def emailBody(date=None):
         df = pd.read_csv(f'data/prod/{field}/data.csv')
         df = df[df['Date'] == date]
         if field == 'ET' or field == 'WB': 
-            with open('data\prod\WB\wells.json', 'r') as f: wells:dict = json.loads(f.read())
+            with open('data/prod/WB/wells.json', 'r') as f: wells:dict = json.loads(f.read())
             ww = [w.lower() for w in wells.keys()]
             mask = df['Well Name'].str.lower().isin(ww)
             if field == 'ET': mask = ~mask
@@ -241,34 +262,66 @@ def emailBody(date=None):
     df = pd.DataFrame(res)
     df['BBL'] = df['BBL'].astype(int)
     df['MCF'] = df['MCF'].astype(int)
+    return df
+    
+def make_bold_underline(cell):
+    for paragraph in cell.paragraphs:
+        for run in paragraph.runs:
+            run.bold = True
+            run.underline = True
+
+def remove_table_borders(tbl):
+    tbl_pr = tbl._element.find(qn('w:tblPr'))  # Get <w:tblPr>
+    if tbl_pr is None:
+        tbl_pr = OxmlElement('w:tblPr')
+        tbl._element.insert(0, tbl_pr)  # Insert at the beginning
+
+    # Create or replace <w:tblBorders> to remove borders
+    tbl_borders = tbl_pr.find(qn('w:tblBorders'))
+    if tbl_borders is None:
+        tbl_borders = OxmlElement('w:tblBorders')
+        tbl_pr.append(tbl_borders)
+
+    for border_name in ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']:
+        border = OxmlElement(f'w:{border_name}')
+        border.set(qn('w:val'), 'nil')  # 'nil' removes the border
+        tbl_borders.append(border)
+
+def cml_daily_docx():
+    df = totals_df()    
     doc = Document()
 
     table = doc.add_table(rows=1, cols=len(df.columns))
-    table.style = 'Table Grid'
     hdr_cells = table.rows[0].cells
     for col_idx, column_name in enumerate(df.columns):
         hdr_cells[col_idx].text = column_name
+        make_bold_underline(hdr_cells[col_idx])  # Apply bold and underline
 
+    # Populate table with data
+    rows = []
     for _, row in df.iterrows():
         row_cells = table.add_row().cells
         for col_idx, value in enumerate(row):
             row_cells[col_idx].text = str(value)
+        rows.append(row_cells)
 
-    doc.save('data\prod\\reports\\report.docx')
-    return
+    # Make last row bold & underlined
+    last_row_cells = rows[-1]  # Get the last row added
+    for cell in last_row_cells:
+        make_bold_underline(cell)
+
+    # Remove table borders
+    remove_table_borders(table)
+
+    doc.save('data/prod/reports/dailyreports/report.docx')
+    return str(doc)
 
 
 if __name__ == '__main__':
-    reprt = ProdReport(field='ST',title='Kleimann #3 RE',well='Kleimann #3 RE')
-    reprt.genReport()
-    exit()
+    reprt = ProdReport(field='ST',title='South Texas')
     for field,title in {'ST':'South Texas','ET':'East Texas','WT':'West TX','GC':'Gulf Coast','NM':'New Mexico'}.items():
         reprt = ProdReport(field=field,title=title)
-        reprt.genReport()
-        webbrowser.open_new_tab(f"C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\backend\\data\\prod\\reports\\report.pdf")
+        info = reprt.genReport()
     reprt = ProdReport(field='WB',title='Woodbine')
     reprt.genReport()
-    exit()
-    emailBody()
-    webbrowser.open_new_tab(f"C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\backend\\data\\prod\\WB\\report.pdf")
-    webbrowser.open_new_tab(f'C:\\Users\\plaisancem\\Documents\\dev\\prod_app\\backend\\data\\prod\\reports\\report.docx')
+    cml_daily_docx()

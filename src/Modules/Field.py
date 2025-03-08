@@ -18,11 +18,12 @@ import calendar
 
 
 class Field():
-    def __init__(self,field,abbr,start,range=None) -> None:
+    def __init__(self,field,abbr,start=None,range=None,takeToday=False) -> None:
         self.field = field
         self.abbr = abbr
         self.start = start
         self.since = start
+        self.takeToday = takeToday
         if start:
             self.since = datetime.strptime(str(start), "%Y-%m-%d").timestamp()
             self.imprtDays = self.dStrs(start,str(datetime.today().date()))
@@ -41,31 +42,36 @@ class Field():
         updates = []
         importData = []
         batteries = {}
-        dfGasImport = pd.DataFrame()
+        dfGasImport = pd.DataFrame({'Well Name':[],'Date':[],'Sales Pressure':[],'Flow Rate Sales':[],'Flow Rate Flare':[]})
         runtickets = pd.DataFrame()
         for well,id in self.IWell.wells.items():
             if 'Compressor' in well or 'Drip' in well or 'SWD' in well: continue
-            #if well != 'Pfeiffer #1':continue
+            #if well != 'CR #101':continue
+            
             print(well)
+            #if well not in ['CL Moore 6','CL Moore 8','Moore CL 9 Test','CL Moore #5']:continue
             if self.abbr == 'ST': 
                 dfGasImport = pd.concat([dfGasImport,self.importGasData(id,well)]).drop_duplicates()
-                batteries[well],well_tickets = self.tank_levels(well,id)
-                runtickets=pd.concat([runtickets,well_tickets])
-                
+                #batteries[well],well_tickets = self.tank_levels(well,id)
+                #runtickets=pd.concat([runtickets,well_tickets])
             prod = self.IWell.GET_wellProduction(id)
             comms = self.IWell.GET_wellComments(id)
             tp = self.IWell.GET_wellFieldValue(id,607)
             cp = self.IWell.GET_wellFieldValue(id,1415)
-        
-            for i in prod[:]:
-                if i["production_time"] != i["updated_at"] and i["production_time"] < self.since:#gets updated prod, but not updates since last import
-                    i["Well Name"] = well
-                    updates.append(i)
-                    prod.remove(i)
+            #tp,cp = [],[]
+            if self.start:
+                for i in prod[:]:
+                    if i["production_time"] != i["updated_at"] and i["production_time"] < self.since+60*60*24:#gets updated prod, but not updates since last import
+                        i["Well Name"] = well
+                        updates.append(i)
+                        prod.remove(i)
 
-            for i in prod[:]:# copy of list
-                if i["date"] == str(datetime.today().date()) or i["date"] == str(self.start) or time.mktime(datetime.strptime(i["date"], "%Y-%m-%d").timetuple()) < self.since: prod.remove(i)
-            
+                for i in prod[:]:# copy of list
+                    if (i["date"] == str(datetime.today().date()) and not self.takeToday) \
+                        or i["date"] == str(self.start) \
+                        or time.mktime(datetime.strptime(i["date"], "%Y-%m-%d").timetuple()) < self.since: 
+                        prod.remove(i)
+
             if prod == []:#needs fix
                 continue
             
@@ -89,8 +95,22 @@ class Field():
                     tpAvg = tp[-1]['value']
 
             for i in range(len(prod)):
+                if self.takeToday and prod[i]['gas'] > 0 and prod[i]['oil'] == 0 and prod[i]['water'] == 0:
+                    continue 
+                
                 date = prod[i]["date"]
-                data = [well,prod[i]["date"],prod[i]["oil"],prod[i]["gas"],prod[i]["water"],tpAvg,cpAvg]
+                #gasSales = prod[i]["gas"] if 'gas_injection' not in prod[i] else prod[i]['gas'] - prod[i]['gas_injection']
+                gasSales = prod[i]["gas"]
+
+                #mask = dfGasImport['Date'] == date
+                #if not mask.any():
+                #    if prod[i]['gas_flare'] > 0:
+                #        dfGasImport = dfGasImport._append({'Well Name':well,'Date':date,'Sales Pressure':0,
+                #                                      'Flow Rate Sales':0,'Flow Rate Flare':prod[i]['gas_flare']})
+                #print(dfGasImport)
+                #exit()
+
+                data = [well,prod[i]["date"],prod[i]["oil"],gasSales,prod[i]["water"],tpAvg,cpAvg]
                 for c in range(len(comms)):
                     dt = datetime.fromtimestamp(comms[c]['note_time']).strftime('%Y-%m-%d')
                     if dt == date: 
@@ -111,6 +131,7 @@ class Field():
         dfimport = dfimport.sort_values(['Date', 'Well Name'], ascending = [False , True])
         dfimport.Date = pd.to_datetime(dfimport.Date)
         dfimport = dfimport.reset_index(drop=True)
+        dfGasImport.to_csv('dfgasimport.csv')
         return dfimport,updates,batteries,dfGasImport
     
     def importGasData(self,wellId,well):
@@ -119,9 +140,10 @@ class Field():
             groupedData = defaultdict(list)
             #dates = ['2024-07-20','2024-07-21','2024-07-22']
             for reading in data:
-                dt_string = datetime.fromtimestamp(reading['reading_time']).strftime('%Y-%m-%d %H:%M:%S')
-                date = dt_string.split(' ')[0]
-                groupedData[date].append(reading['value'])
+                if 'reading_time' in reading and 'value' in reading: 
+                    dt_string = datetime.fromtimestamp(reading['reading_time']).strftime('%Y-%m-%d %H:%M:%S')
+                    date = dt_string.split(' ')[0]
+                    groupedData[date].append(reading['value'])
 
             for date,vals in groupedData.items():
                 avg = round(sum([float(x) for x in vals])/len(vals),2)
@@ -485,13 +507,22 @@ def generateMnthArray(start_year, end_year):
             date_array.append([first_day, last_day])
     return date_array
 
+def getHistory():
+    months = generateMnthArray(2017,2024)
+    df = pd.DataFrame()
+    for mnth in months:
+        print(mnth[0])
+        fld = Field('Gulf Coast','GC',range=mnth)
+        dfMnth,_,_,_ = fld.importData()
+        df = pd.concat([df,dfMnth])
+        dfMnth.to_csv(f'data/misc/GChistory/{mnth[0]}.csv')
+    df.to_csv('GCHistory.csv')
+    return
 
 if __name__ == '__main__':
-    fld = Field('SOUTH TEXAS','ST','2024-07-20',None)
-    print(fld.IWell.wells)
-    #'Pfeiffer-Byrd #1': 33344
-    fld.importGasData(33344,'Pfeiffer-Byrd #1')
-       
+   f = Field('SOUTH TEXAS','ST','2024-12-31')
+   f.importData()
+
     
 
 
