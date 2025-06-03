@@ -16,6 +16,8 @@ from src.Modules.OutlookBot import ReportBot
 import shutil
 import os
 from src.Modules.Logger import Logger
+import io
+
 
 def updateApp(field,importProd=True,takeToday=False):
     print(field)
@@ -71,9 +73,10 @@ def updateApp(field,importProd=True,takeToday=False):
     
     df = df[df['Well Name'] != title]
     df['Well Name'] = df['Well Name'].str.title()
-    
-    with open("data/misc/wnMap.json",'r') as f: wnMap = json.load(f)
-    for k,v in wnMap.items(): df.loc[df['Well Name'] == k,'Well Name'] = v
+    if field != 'IW':
+        with open("data/misc/wnMap.json",'r') as f: wnMap = json.load(f)
+        for k,v in wnMap.items(): df.loc[df['Well Name'] == k,'Well Name'] = v
+    df['Well Name'] = df['Well Name'].str.replace(' Re',' RE')
     
     df = df.sort_values(['Date', 'Well Name'], ascending = [False , True])
     df.to_csv(f'data/prod/{abbr}/data.csv', index=False)
@@ -184,7 +187,8 @@ def updateApp(field,importProd=True,takeToday=False):
     #if abbr == 'ST' and importProd: Tanks.run()
     if abbr == 'ST' or abbr == 'ET':
         try:
-            update_pumpInfo(abbr)
+            updateApp_tam(abbr,f'data/misc/{abbr}/TAM_update_2025-03-17.csv')
+
             analyze(abbr)
         except Exception as err:
             print(f'ONE DRIVE ERROR {err}')
@@ -276,78 +280,79 @@ def write_formations():
     with open('data/misc/formations.json','w') as f:
         json.dump(dd,f)
 
-def update_STprod(importPath):
-    dfimport = pd.read_csv(importPath)
-    df = pd.read_csv('./data/misc/ST/tam.csv')
-    df = pd.concat([df,dfimport]).reset_index(drop=True)
-    df.to_csv('./data/misc/ST/tam.csv',index=False)
-    print(df)
-    df['Date'] = pd.to_datetime(df['Date'] + ' ' + df['Time'],format='mixed')
-
-    df_fl = df[(~df['Distance to Liquid (ft)'].isna()) & (df['Well State'] == 'Producing')].reset_index(drop=True)
-    df_dyno = df[(~df['Strokes Per Minute (SPM)'].isna())].reset_index(drop=True)
-
-    df_fl.to_json(f'../frontend/data/ST/fls.json', orient='values', date_format='iso')
-
-    df_fl = df_fl.loc[df_fl.groupby('Well Name')['Date'].idxmax()]
-    df_dyno = df_dyno.loc[df_dyno.groupby('Well Name')['Date'].idxmax()]
-
-    file_path = "C:/Users/plaisancem/CML Exploration/Travis Wadman - CML/STprod.xlsx"
-    wb = openpyxl.load_workbook(file_path)
-    sheet_stprod = wb['Prod']  
-   
-    dfstprod = pd.read_excel(file_path)
-    def well_name_key(x):
-        if x == x:
-            x=x.lower().replace('#', '').replace(' ', '')
-        return x
-    df_fl['Well Name'] = df_fl['Well Name'].apply(lambda x: well_name_key(x))
-    df_dyno['Well Name'] = df_dyno['Well Name'].apply(lambda x: well_name_key(x))
-    dfstprod['Key'] = dfstprod['Well Name'].apply(lambda x: well_name_key(x))
-
+def updateApp_tam(abbr,importPath):
     
-    for _, row in df_fl.iterrows():
-        mask = row['Well Name'] == dfstprod['Key']
-        dfstprod.loc[mask, ['FL Date', 'GFLAP']] = row['Date'], row['Gas Free Above Pump (ft)']
+    def import_tam_data(importPath):
+        dfimport = pd.read_csv(importPath)
+        df = pd.read_csv('./data/misc/ST/tam.csv')
+        df = pd.concat([df,dfimport]).reset_index(drop=True)
+        df.to_csv('./data/misc/ST/tam.csv',index=False)
+        print(df)
+        df['Date'] = pd.to_datetime(df['Date'] + ' ' + df['Time'],format='mixed')
+
+        df_fl = df[(~df['Distance to Liquid (ft)'].isna()) & (df['Well State'] == 'Producing')].reset_index(drop=True)
+        df_dyno = df[(~df['Strokes Per Minute (SPM)'].isna())].reset_index(drop=True)
+
+        df_fl.to_json(f'../frontend/data/ST/fls.json', orient='values', date_format='iso')
+
+        df_fl = df_fl.loc[df_fl.groupby('Well Name')['Date'].idxmax()]
+        df_dyno = df_dyno.loc[df_dyno.groupby('Well Name')['Date'].idxmax()]
+
+        file_path = "C:/Users/plaisancem/CML Exploration/Travis Wadman - CML/STprod.xlsx"
+        wb = openpyxl.load_workbook(file_path)
+        sheet_stprod = wb['Prod']  
     
-    for _, row in df_dyno.iterrows():
+        dfstprod = pd.read_excel(file_path)
+        def well_name_key(x):
+            if x == x:
+                x=x.lower().replace('#', '').replace(' ', '')
+            return x
+        df_fl['Well Name'] = df_fl['Well Name'].apply(lambda x: well_name_key(x))
+        df_dyno['Well Name'] = df_dyno['Well Name'].apply(lambda x: well_name_key(x))
+        dfstprod['Key'] = dfstprod['Well Name'].apply(lambda x: well_name_key(x))
+
+        
+        for _, row in df_fl.iterrows():
             mask = row['Well Name'] == dfstprod['Key']
-            #if not mask.any():
-            #    print(row['Well Name'])
-            dfstprod.loc[mask, ['SPM', 'DH SL', 'EPT']] = row['Strokes Per Minute (SPM)'], \
-                                                    row['Maximum Plunger Stroke (in)'], row['Effective Plunger Travel (in)']
+            dfstprod.loc[mask, ['FL Date', 'GFLAP']] = row['Date'], row['Gas Free Above Pump (ft)']
+        
+        for _, row in df_dyno.iterrows():
+                mask = row['Well Name'] == dfstprod['Key']
+                #if not mask.any():
+                #    print(row['Well Name'])
+                dfstprod.loc[mask, ['SPM', 'DH SL', 'EPT']] = row['Strokes Per Minute (SPM)'], \
+                                                        row['Maximum Plunger Stroke (in)'], row['Effective Plunger Travel (in)']
 
-    dfstprod['FL Date'] = pd.to_datetime(dfstprod['FL Date']).dt.date
+        dfstprod['FL Date'] = pd.to_datetime(dfstprod['FL Date']).dt.date
 
-    for idx, row in dfstprod.iterrows():
-        well_name_col = 'A' 
-        fl_date_col = 'K'   
-        gflap_col = 'L'      
-        spm_col = 'E'
-        dhsl_col = 'F'
-        ept_col = 'H'
+        for idx, row in dfstprod.iterrows():
+            well_name_col = 'A' 
+            fl_date_col = 'K'   
+            gflap_col = 'L'      
+            spm_col = 'E'
+            dhsl_col = 'F'
+            ept_col = 'H'
 
-        well_name_cell = sheet_stprod[f'{well_name_col}{idx + 2}']  # Header row
-        fl_date_cell = sheet_stprod[f'{fl_date_col}{idx + 2}']
-        gflap_cell = sheet_stprod[f'{gflap_col}{idx + 2}']
+            well_name_cell = sheet_stprod[f'{well_name_col}{idx + 2}']  # Header row
+            fl_date_cell = sheet_stprod[f'{fl_date_col}{idx + 2}']
+            gflap_cell = sheet_stprod[f'{gflap_col}{idx + 2}']
 
-        spm_cell = sheet_stprod[f'{spm_col}{idx + 2}']
-        dhsl_cell = sheet_stprod[f'{dhsl_col}{idx + 2}']
-        ept_cell = sheet_stprod[f'{ept_col}{idx + 2}']
-
-
-        if well_name_cell.value == row['Well Name']:
-            fl_date_cell.value = row['FL Date']
-            gflap_cell.value = row['GFLAP']
-            spm_cell.value = row['SPM']
-            dhsl_cell.value = row['DH SL']
-            ept_cell.value = row['EPT']
+            spm_cell = sheet_stprod[f'{spm_col}{idx + 2}']
+            dhsl_cell = sheet_stprod[f'{dhsl_col}{idx + 2}']
+            ept_cell = sheet_stprod[f'{ept_col}{idx + 2}']
 
 
-    wb.save(file_path)
+            if well_name_cell.value == row['Well Name']:
+                fl_date_cell.value = row['FL Date']
+                gflap_cell.value = row['GFLAP']
+                spm_cell.value = row['SPM']
+                dhsl_cell.value = row['DH SL']
+                ept_cell.value = row['EPT']
 
-def update_pumpInfo(abbr):
-    if abbr == 'ST':update_STprod(importPath='./data/misc/ST/TAM_update_2025-02-17.csv')
+
+        wb.save(file_path)
+
+    if abbr == 'ST':import_tam_data(importPath)
     path = "C:/Users/plaisancem/CML Exploration/Travis Wadman - CML/STprod.xlsx" if abbr == 'ST' \
         else "C:/Users/plaisancem/CML Exploration/Travis Wadman - CML/East Texas/East Texas Production Tracker.xlsx"
     tempPath = "C:/Users/plaisancem/Downloads/prod-copy.xlsx"
@@ -478,7 +483,7 @@ def recYrProd(df:pd.DataFrame,field):
 def handleGC(df:pd.DataFrame) -> pd.DataFrame:
     df.loc[df['Well Name'] == 'JM MOORE','Well Name'] = 'JM Moore'
     mask = (df['Well Name'].str.contains("JM Moore"))
-    jms = ['JM Moore 178','JM Moore 192','JM Moore Main Battery','JM Moore Test Battery']
+    jms = ['JM Moore 178','JM Moore Main Battery','JM Moore Test Battery']
 
     ds = set(df['Date'].tolist()); ds = list(ds)
     for d in ds:
@@ -486,13 +491,18 @@ def handleGC(df:pd.DataFrame) -> pd.DataFrame:
         if not mask.any(): continue
         jmdf = df[mask]
         sums = jmdf[['Oil (BBLS)', 'Gas (MCF)','Water (BBLS)']].sum()
-        tp = jmdf.loc[jmdf['Well Name'] == 'JM Moore 192', 'TP'].tolist()[0]
-        cp = jmdf.loc[jmdf['Well Name'] == 'JM Moore 192', 'CP'].tolist()[0]
-        c192 = jmdf.loc[jmdf['Well Name'] == 'JM Moore 192', 'Comments'].tolist()[0]; c178 = jmdf.loc[jmdf['Well Name'] == 'JM Moore 178', 'Comments'].tolist()[0]
-        comm192 = c192 if c192 != 'nan' else ''
+
+        c178 = jmdf.loc[jmdf['Well Name'] == 'JM Moore 178', 'Comments'].tolist()[0]
+        c_main = jmdf.loc[jmdf['Well Name'] == 'JM Moore Main Battery', 'Comments'].tolist()[0]
+        c_test = jmdf.loc[jmdf['Well Name'] == 'JM Moore Test Battery', 'Comments'].tolist()[0]
+
         comm178 = c178 if c178 != 'nan' else ''
+        comm_main = c_main if c_main != 'nan' else ''
+        comm_test = c_test if c_test != 'nan' else ''
+
         entry = {'Well Name':'JM Moore','Date':d,'Oil (BBLS)':sums['Oil (BBLS)'],'Gas (MCF)':sums['Gas (MCF)'],
-                    'Water (BBLS)':sums['Water (BBLS)'],'TP':tp,'CP':cp,'Comments':f'192: {comm192} 178: {comm178}'}
+                    'Water (BBLS)':sums['Water (BBLS)'],'TP':0,'CP':0,'Comments':f'Test Bat: {comm_test} Main Bat: {comm_main} 178: {comm178}'}
+        
         entry = {k:[v] for k,v in entry.items()}
         df = pd.concat([df,pd.DataFrame(entry)])
 
@@ -519,7 +529,7 @@ def lstProd(field,day):#day YYYY-MM-dd
     df = pd.read_csv(f'data/prod/{field}/data.csv')
 
     wells = sorted(set(df['Well Name'].tolist()))
-    wells = [w for w in wells if w not in pd.read_csv('data/prod/lastprod/shutins.csv')['Well'].tolist()]
+    wells = [w for w in wells if w not in pd.read_csv('data/prod/IW/data.csv')['Well Name'].tolist()]
 
     res = {'Well Name':[],'Last Production': [],f'Days since {day}':[]}
     for well in wells:
@@ -531,17 +541,45 @@ def lstProd(field,day):#day YYYY-MM-dd
             unix_since = int(datetime.strptime(day, "%Y-%m-%d").timestamp()) - int(datetime.strptime(d, "%Y-%m-%d").timestamp()) 
             days = round(unix_since/(60*60*24))
         res['Well Name'].append(well);res['Last Production'].append(d);res[f'Days since {day}'].append(days)
+    rm_wells = ['Christopher #1','Davis Ozelle Unit 1 H','Wendel #1','Wickson Unit #1','North Twinberry 5 State #1','Raider 9 St #2']
+    df = df.loc[~df['Well Name'].isin(rm_wells)]
+    pd.DataFrame(res).to_csv(f'data/prod/reports/lastprod/{field} Last Production since {day}.csv',index=False)
 
-    pd.DataFrame(res).to_csv(f'data/prod/lastProd/lastprod{field}.csv',index=False)
+def move_well_IW(field_abbr,well):
+    df = pd.read_csv(f'data/prod/{field_abbr}/data.csv')
+    df_IW = pd.read_csv(f'data/prod/IW/data.csv')
+    mask = df['Well Name'] == well
+    if mask.any():
+        df = df.loc[mask]
+    else:
+        print('Well',well,'NOT FOUND')
+    df_IW = pd.concat([df_IW,df]).drop_duplicates()
+    df_IW = df_IW.sort_values(['Date', 'Well Name'], ascending = [False , True])
 
-def meterStatus():
-    dfprod = pd.read_csv('data/prod/ST/data.csv')
-    print(df)
-    wells = sorted(set(dfprod['Well Name'].tolist()))
-    res = defaultdict(list)
-    for well in wells:
-        dfWell = df.loc[df['Well Name'] == well].reset_index()
-        print(dfWell)
+    print(df_IW)
+    df_IW.to_csv('data/prod/IW/data.csv',index=False)
+    updateApp('Inactive Wells',0,0)
+    return
+
+def cml_prod_report():
+    dfs =pd.DataFrame()
+    with open('data/prod/IW/field.json', 'r') as f:
+        iw_fields = json.load(f)
+
+    for idx,f in enumerate(['SOUTH TEXAS','EAST TEXAS','GULF COAST','WEST TEXAS','NEW MEXICO','INACTIVE WELLS']):
+        abbr = ''.join([w[0] for w in f.split(' ')]).upper()
+        df = pd.read_csv(f'data/prod/{abbr}/data.csv')
+        df['Date'] = pd.to_datetime(df['Date'])
+        df = df.loc[(df['Date'] >= '3/1/2024') & (df['Date'] <= '2/28/2025')]
+        if abbr != 'IW':
+            df['Field'] = f
+        else:
+            df['Field'] = df['Well Name'].apply(lambda x: iw_fields.get(x,'')) 
+        dfs = pd.concat([dfs,df])
+        
+    dfs = dfs.loc[dfs['Well Name'] != 'Tortuga Unit B 2Re']
+
+    dfs.to_excel('CML Production 3-1-24 thru 2-28-25.xlsx',index=False)
     return
 
 def formatStackedGraph(abbr):
@@ -579,6 +617,12 @@ def automated_report(receipent,wells):
     return
 
 if __name__ == '__main__':
+    #updateApp_tam('ST','data\misc\ST\TAM 5-12-25.csv')
+    #exit()
+    #move_well_IW('ST','Dial #1 ST')
+    #for abbr in ['ST','ET','GC','WT','NM']:
+    #    lstProd(abbr,'2025-05-05')
+    #exit()
+    #updateApp_tam('ST','data\misc\ST\TAM_update_2025-03-17.csv')
     for idx,f in enumerate(['SOUTH TEXAS','EAST TEXAS','Gulf Coast','West TX','New Mexico']):
         updateApp(field=f,importProd=1,takeToday=0)
-    

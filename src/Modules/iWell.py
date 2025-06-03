@@ -117,7 +117,6 @@ class IWell:
         x = requests.get('https://api.iwell.info/v1/tanks', headers={'Authorization': f'Bearer {self.token}'})
         data = x.json()['data']
         df = pd.DataFrame(data)
-        df.to_csv('tanks.csv',index=False)
         return data
 
     def GET(self,url):
@@ -140,8 +139,7 @@ class IWell:
     def POST_tankReading(self,tankID,payload):
         payload = json.dumps(payload)
         response = requests.post(f'https://api.iwell.info/v1/tanks/{tankID}/readings',data=payload ,headers={'Authorization': f'Bearer {self.token}'})
-        print(response)
-        return
+        return response
 
     def GET_wellTests(self,wellID):
         x = requests.get(f'https://api.iwell.info/v1/wells/{wellID}/well-tests', headers={'Authorization': f'Bearer {self.token}'})
@@ -175,6 +173,7 @@ class IWell:
                 return x['data']
         return []
 
+
 def fetch_historical_data():
     since = datetime.strptime(str('2024-5-01'), "%Y-%m-%d").timestamp()
     iw = IWell(field='SOUTH TEXAS',abbr='ST',since=since)
@@ -205,7 +204,7 @@ def fetch_historical_data():
         json.dump(res,f)
     return
 
-if __name__ == "__main__":
+def pipelines():
     since = datetime.strptime(str('2024-12-01'), "%Y-%m-%d").timestamp()
     st = IWell('SOUTH TEXAS','ST',since)
     m = st.GET_wellMeters(st.wells['J Beeler #1'])
@@ -240,4 +239,15 @@ if __name__ == "__main__":
     pd.DataFrame(pipelinePressures).to_csv('pp.csv')
     #pd.DataFrame(res).to_excel('iwellmodems.xlsx',index=False)
 
-    
+
+if __name__ == "__main__":
+    since = datetime.strptime(str('2025-05-01'), "%Y-%m-%d").timestamp()
+    et = IWell('EAST TEXAS','ET',since)
+    data = {'reading_time': 1748289600, 'top_feet': 6, 'top_inches': 1, 'cut_feet': None, 'cut_inches': None, 'previous_top_feet': 6, 
+            'previous_top_inches': 7, 'previous_cut_feet': None, 'previous_cut_inches': None}
+    resp = et.POST_tankReading(49322,data)
+    print(resp)
+    print(resp.json())
+    oil1 = et.GET_tankReading(49322)
+    print(oil1)
+

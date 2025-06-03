@@ -32,6 +32,7 @@ def groupMontlyProd(df:pd.DataFrame,name=''):
     df_final = pd.concat([df, mo_sum])
     df_final = df_final.sort_values('Date').reset_index(drop=True)
     return df_final
+
 # RUN prodMonthly.py BEFORE THIS TO HAVE UPDATED DECLINE CURVES
 def main():
     dfptnwells = pd.read_csv('data/decline/ptnWells.csv')
@@ -58,7 +59,9 @@ def main():
 
     for well in stWells:
         if well in skippnt:continue
-        if well != "Little 179 #1":continue
+        #if well != "Little 179 #1":continue
+        if well != "Chad #1":continue
+        
         well_params = declineCurve(well,df)
 
         wells.add(well)
@@ -191,7 +194,7 @@ def declineCurve(name,df):
     else:
         book = maunalParams[name]
         qi_est, b_est, Di_est = book['qi'],book['b'],book['di']
-    print(b_est, Di_est/12)
+    print(b_est, Di_est)
     exit()
     extr_mo = 100 # extrapolated months
     t_model = np.linspace(min(t), max(t)+extr_mo, 1+max(t)+extr_mo)  # Array of time indexes (start, stop, # of data points)

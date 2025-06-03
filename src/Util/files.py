@@ -55,7 +55,7 @@ def walkPath(keys,path="C:/"):
 
     print(res)
     df = pd.DataFrame(res)
-    df.to_csv('keys.csv')
+    df.to_csv('orchard.csv')
 
 if __name__ == '__main__':
-    walkPath(keys=['.xlsx'],path="C:/")
+    walkPath(keys=['frac'],path="C:\\Users\\plaisancem\\CML Exploration\\Travis Wadman - CML")

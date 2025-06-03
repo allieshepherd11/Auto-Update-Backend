@@ -97,7 +97,7 @@ if __name__ == '__main__':
     #    res = qrod.get_results()#re
     #    print(res)
     #exit()
-    df_inputs = pd.read_excel("C:/Users/plaisancem/Downloads/qrod_inputs.xlsx")
+    df_inputs = pd.read_excel("C:/Users/plaisancem/Downloads/qrod_inputs - copy.xlsx")
 
     depths = [f"{int(i):,}" for i in df_inputs['pump depth'] if i == i]
     sls = [f"{int(i):.2f}" for i in df_inputs['stroke length'] if i == i]
@@ -123,4 +123,4 @@ if __name__ == '__main__':
                     for k,v in res.items():
                         df_res[k].append(v)
 
-    pd.DataFrame(df_res).to_excel('qrod_results.xlsx',index=False)
+    pd.DataFrame(df_res).to_excel('qrod_results_86_8000.xlsx',index=False)

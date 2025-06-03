@@ -1,1 +1,0 @@
-"min_unit":,"rod_taper":,"peak_gb_torque":,"bpd_eff":,"top_rod_loading"

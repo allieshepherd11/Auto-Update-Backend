@@ -1,66 +1,43 @@
-from docx import Document
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
 import pandas as pd
+from collections import defaultdict
+import json
 
-# Sample DataFrame
-data = {'Column1': [1, 2, 3], 'Column2': ['A', 'B', 'C'], 'Column3': [4.5, 5.5, 6.5]}
-df = pd.DataFrame(data)
+df_192 = pd.read_csv(r"C:\Users\plaisancem\Downloads\jm moore 192.csv")
+df_gc = pd.read_csv('data/prod/GC/data.csv')
+df_gc.loc[df_gc['Comments'] == '0', 'Comments'] = ''
+df_gc = df_gc.loc[~((df_gc['Well Name'] == 'Jm Moore #192') & (df_gc['Date'] < '2015-12-01'))]
 
-# Create a Document
-doc = Document()
 
-# Add a table with the same number of columns as the DataFrame
-table = doc.add_table(rows=1, cols=len(df.columns))
+df_gc.to_csv('data/prod/GC/data.csv',index=False)
 
-# Function to make text bold and underlined
-def make_bold_underline(cell):
-    for paragraph in cell.paragraphs:
-        for run in paragraph.runs:
-            run.bold = True
-            run.underline = True
+exit()
+df_192['Well Name'] = 'JM Moore #192'
+df_192['TP'] = 50
+df_192['CP'] = 50
 
-# Function to remove table borders
-def remove_table_borders(tbl):
-    tbl_pr = tbl._element.find(qn('w:tblPr'))  # Get <w:tblPr>
-    if tbl_pr is None:
-        tbl_pr = OxmlElement('w:tblPr')
-        tbl._element.insert(0, tbl_pr)  # Insert at the beginning
+df_192['Date'] = pd.to_datetime(df_192['Date'])
+df_gc['Date'] = pd.to_datetime(df_gc['Date'])
 
-    # Create or replace <w:tblBorders> to remove borders
-    tbl_borders = tbl_pr.find(qn('w:tblBorders'))
-    if tbl_borders is None:
-        tbl_borders = OxmlElement('w:tblBorders')
-        tbl_pr.append(tbl_borders)
+df_192 = df_192.drop(columns=['Gas Flare (MCF)'])
 
-    for border_name in ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']:
-        border = OxmlElement(f'w:{border_name}')
-        border.set(qn('w:val'), 'nil')  # 'nil' removes the border
-        tbl_borders.append(border)
+print(df_192.columns)
+print(df_gc.columns)
 
-# Set table header (First Row - Bold & Underlined)
-hdr_cells = table.rows[0].cells
-for col_idx, column_name in enumerate(df.columns):
-    hdr_cells[col_idx].text = column_name
-    make_bold_underline(hdr_cells[col_idx])  # Apply bold and underline
+df = pd.concat([df_gc,df_192])
+df = df.sort_values(['Date', 'Well Name'], ascending = [False , True]).reset_index(drop=True)
 
-# Populate table with data
-rows = []
-for _, row in df.iterrows():
-    row_cells = table.add_row().cells
-    for col_idx, value in enumerate(row):
-        row_cells[col_idx].text = str(value)
-    rows.append(row_cells)
+print(df)
+df = df.fillna(0)
+df['Oil (BBLS)'] = df['Oil (BBLS)'].astype(int)
 
-# Make last row bold & underlined
-last_row_cells = rows[-1]  # Get the last row added
-for cell in last_row_cells:
-    make_bold_underline(cell)
+value_to_subtract = df.loc[df['Well Name'] == 'JM Moore #192', 'Oil (BBLS)'].iloc[0]
+df.loc[df['Well Name'] == 'JM Moore', 'Oil (BBLS)'] -= value_to_subtract
 
-# Remove table borders
-remove_table_borders(table)
+value_to_subtract = df.loc[df['Well Name'] == 'JM Moore #192', 'Water (BBLS)'].iloc[0]
+df.loc[df['Well Name'] == 'JM Moore', 'Water (BBLS)'] -= value_to_subtract
 
-# Save the document
-doc.save("output.docx")
+value_to_subtract = df.loc[df['Well Name'] == 'JM Moore #192', 'Gas (MCF)'].iloc[0]
+df.loc[df['Well Name'] == 'JM Moore', 'Gas (MCF)'] -= value_to_subtract
 
-print("Word document saved as 'output.docx' with first and last row bolded & underlined, and no table borders.")
+
+df.to_csv('data/prod/GC/data.csv',index=False)

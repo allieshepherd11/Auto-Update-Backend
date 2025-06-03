@@ -14,8 +14,9 @@ def payoutsHist():
             if sheet_name in ['Georgetown Wells','Buda Wells','Austin Chalk Wells','Others']:
 
                 df = excel_file.parse(sheet_name)
-                df = df[[df.columns[0],'Unnamed: 19']]
-                df = df.rename(columns={df.columns[0]: 'Well Name','Unnamed: 19':'% Payout'}).dropna().reset_index(drop=True)
+                print(df)
+                df = df[[df.columns[0],'Unnamed: 21']]
+                df = df.rename(columns={df.columns[0]: 'Well Name','Unnamed: 21':'% Payout'}).dropna().reset_index(drop=True)
                 monthStr = tar.split('.')[0].replace('Payouts','').strip()
                 df['Month'] = datetime.strptime(monthStr, "%Y-%m").replace(day=1).date().strftime('%Y-%m-%d')
                 dfs.append(df)
@@ -57,9 +58,10 @@ def payouts(field,mnth):
     
     for sheet_name in sheet_names:
         if sheet_name in field_sheets[field]:
+            i = 19 if sheet_name == 'Georgetown Wells' else 20
             df = excel_file.parse(sheet_name)
-            df = df[[df.columns[0],'Unnamed: 19']]
-            df = df.rename(columns={df.columns[0]: 'Well Name','Unnamed: 19':'% Payout'}).dropna().reset_index(drop=True)
+            df = df[[df.columns[0],f'Unnamed: {i}']]
+            df = df.rename(columns={df.columns[0]: 'Well Name',f'Unnamed: {i}':'% Payout'}).dropna().reset_index(drop=True)
             dfs.append(df)
     if len(dfs) > 0:
         df = pd.concat(dfs, ignore_index=True) \
@@ -84,7 +86,8 @@ def payouts(field,mnth):
 
 def economics(field,mnth,mnthIgnore):
     #mnth = 'Jan 2024'
-    df = pd.read_excel(f"C:/Users/plaisancem/CML Exploration/Travis Wadman - CML/P&L's/2024 PL'S By Well {field} - Copy.xlsx")
+    p = f"C:/Users/plaisancem/CML Exploration/Travis Wadman - CML/P&L's/2025 PL'S By Well {field} - Copy.xlsx"
+    df = pd.read_excel(p)
 
     df.columns = df.iloc[0].reset_index(drop=True)
 
@@ -130,11 +133,14 @@ if __name__ == '__main__':
     currMnth = datetime.now().strftime('%Y-%m')
     revMnth = (datetime.now() - timedelta(days=60)).strftime('%b %Y')
     billMnth = (datetime.now() - timedelta(days=30)).strftime('%b %Y')
-    fields = ['South Texas Only','East Texas','East Texas Woodbine','Gulf Coast','West TexasNM']
+    print("revMnth",revMnth)
+    print("billMnth",billMnth)
 
+    fields = ['South Texas Only','East Texas','East Texas Woodbine','Gulf Coast','West TexasNM']
     df_econ = pd.DataFrame()
     df_payout = pd.DataFrame()
-    for field in fields:
+    for idx,field in enumerate(fields):
+        #if idx == 0:continue
         print(field)
         df_payout = pd.concat([df_payout,payouts(field,currMnth)])
         df_econ = pd.concat([df_econ,economics(field,revMnth,billMnth)])
