@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 import json
 from collections import defaultdict
@@ -5,6 +6,11 @@ from itertools import zip_longest
 import pandas as pd
 import time
 from datetime import datetime
+import sys
+import ctypes
+from pathlib import Path
+from collections.abc import Iterable
+
 
 def openFiles():
     import webbrowser
@@ -57,5 +63,40 @@ def walkPath(keys,path="C:/"):
     df = pd.DataFrame(res)
     df.to_csv('orchard.csv')
 
+def findFile(target_name):
+    def get_fixed_drives() -> Iterable[str]:
+        """Return drive roots such as ['C:\\', 'D:\\'] on Windows."""
+        bitmask = ctypes.windll.kernel32.GetLogicalDrives()
+        for i in range(26):
+            if bitmask & 1 << i:               # drive exists
+                drive = f"{chr(65 + i)}:\\"
+                if ctypes.windll.kernel32.GetDriveTypeW(drive) == 3:  # DRIVE_FIXED
+                    yield drive
+
+    def search(root: Path, target: str, case_sensitive: bool = False) -> None:
+        """Walk *root* and print every file whose name contains *target*."""
+        if not case_sensitive:
+            target = target.lower()
+
+        def _ignore(err):          # onerror callback that swallows “Access is denied”
+            pass
+
+        for dirpath, _, filenames in os.walk(root, topdown=True, onerror=_ignore):
+            for fname in filenames:
+                haystack = fname if case_sensitive else fname.lower()
+                if target in haystack:
+                    print(Path(dirpath) / fname)
+
+
+    for drive in get_fixed_drives():
+        print(f"\n>>> Scanning {drive}")
+        try:
+            search(Path(drive), target_name)
+        except Exception as exc:           # extremely broad on purpose
+            print(f"   [skipped {drive} – {exc}]")
+
+
 if __name__ == '__main__':
+    findFile("Lloyd")
+    exit()
     walkPath(keys=['frac'],path="C:\\Users\\plaisancem\\CML Exploration\\Travis Wadman - CML")

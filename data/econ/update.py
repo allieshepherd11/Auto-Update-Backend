@@ -87,7 +87,7 @@ def payouts(field,mnth):
 def economics(field,mnth,mnthIgnore):
     #mnth = 'Jan 2024'
     p = f"C:/Users/plaisancem/CML Exploration/Travis Wadman - CML/P&L's/2025 PL'S By Well {field} - Copy.xlsx"
-    df = pd.read_excel(p)
+    df = pd.read_excel(p,sheet_name='Prospect & Well Listing')
 
     df.columns = df.iloc[0].reset_index(drop=True)
 
@@ -95,6 +95,7 @@ def economics(field,mnth,mnthIgnore):
                         .replace(day=1) - timedelta(days=1)
     mnthIgnore_dt = (datetime.strptime(mnthIgnore, '%b %Y').replace(day=1) + timedelta(days=32))\
                         .replace(day=1) - timedelta(days=1)
+
     df = df.drop([col for col in df.columns if col not in ['Well List:','YTD Gain/Loss',rec_mnth_dt,mnthIgnore_dt]],axis=1)
     df = df.rename(columns={rec_mnth_dt:'Recent Month P&L','Well List:':'Well Name'})
     df = df.sort_values(['Well Name'], ascending = [True]).reset_index(drop=True)
@@ -102,6 +103,7 @@ def economics(field,mnth,mnthIgnore):
     df = df.dropna()
     df = df[df['Well Name'] != 'Well List:']
 
+    
     if 'Jan' not in mnthIgnore:#last mnth of year
         df['YTD P&L'] = df['YTD Gain/Loss'] - df[mnthIgnore_dt]
     else:
@@ -142,7 +144,7 @@ if __name__ == '__main__':
     for idx,field in enumerate(fields):
         #if idx == 0:continue
         print(field)
-        df_payout = pd.concat([df_payout,payouts(field,currMnth)])
+        #df_payout = pd.concat([df_payout,payouts(field,currMnth)])
         df_econ = pd.concat([df_econ,economics(field,revMnth,billMnth)])
     df_econ.to_json(f'C:\\Users\\plaisancem\\Documents\\dev\\Apps\\Prod\\frontend\\data\\econ\\economics.json',orient='records')
     df_payout.to_json(f'C:\\Users\\plaisancem\\Documents\\dev\\Apps\\Prod\\frontend\\data\\econ\\payouts.json',orient='records')

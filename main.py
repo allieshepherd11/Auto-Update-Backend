@@ -617,11 +617,11 @@ def automated_report(receipent,wells):
     return
 
 if __name__ == '__main__':
-    #updateApp_tam('ST','data\misc\ST\TAM 5-12-25.csv')
+    #updateApp_tam('ST','data\misc\ST\TAM 6-5-25.csv')
     #exit()
     #move_well_IW('ST','Dial #1 ST')
     #for abbr in ['ST','ET','GC','WT','NM']:
-    #    lstProd(abbr,'2025-05-05')
+    #    lstProd(abbr,'2025-06-04')
     #exit()
     #updateApp_tam('ST','data\misc\ST\TAM_update_2025-03-17.csv')
     for idx,f in enumerate(['SOUTH TEXAS','EAST TEXAS','Gulf Coast','West TX','New Mexico']):

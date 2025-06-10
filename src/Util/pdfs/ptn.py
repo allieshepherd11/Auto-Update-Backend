@@ -3,6 +3,7 @@ import pandas as pd
 from collections import defaultdict
 from datetime import datetime
 
+
 def get_next_chars(text, target,depth=10):
     index = text.find(target)  # Find the index of the target
     if index == -1:
@@ -135,5 +136,6 @@ if __name__ == '__main__':
     df,df_cf = read_pdf(pdf_path)
     #df.to_csv('ptn_summary.csv',index=False)
     df_cf.to_csv('ptn_cf.csv',index=False)
+
 
                 
