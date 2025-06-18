@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Backend CI Debug</title>
+  <!-- auto-refresh every 5 minutes so you don’t have to manually reload -->
+  <meta http-equiv="refresh" content="300">
+  <style>
+    body { font-family: sans-serif; padding: 1em; }
+    pre  { background: #f4f4f4; padding: 1em; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Last Import Debug</h1>
+  <p><em>(Shows the newest record from data/prod/ST/data.json)</em></p>
+  <pre id="debug">Loading…</pre>
+
+  <script>
+    fetch("data/prod/ST/data.json?cb=" + Date.now())
+      .then(r => r.json())
+      .then(arr => {
+        if (!Array.isArray(arr) || arr.length === 0) {
+          document.getElementById("debug").textContent = "No data!";
+          return;
+        }
+        // assuming the JSON is an array of arrays or objects:
+        const last = arr[0]; // newest on top if your script writes it that way
+        document.getElementById("debug").textContent = JSON.stringify(last, null, 2);
+      })
+      .catch(err => {
+        document.getElementById("debug").textContent = "Error: " + err;
+        console.error(err);
+      });
+  </script>
+</body>
+</html>
