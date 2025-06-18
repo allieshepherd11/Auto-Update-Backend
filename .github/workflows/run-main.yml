@@ -1,0 +1,29 @@
+name: Daily Backend Run
+
+on:
+  schedule:
+    # 8:00 AM CDT (UTC–05:00) → 13:00 UTC
+    - cron:  '0 13 * * *'
+  workflow_dispatch:    # also allow manual runs
+
+jobs:
+  run-backend:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # if your script commits back any files
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run main.py
+        run: python main.py
