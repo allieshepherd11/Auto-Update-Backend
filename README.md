@@ -1,0 +1,1 @@
+[![Daily Backend Run](https://github.com/allieshepherd11/Auto-Update-Backend/actions/workflows/run-main.yml/badge.svg)](https://github.com/allieshepherd11/Auto-Update-Backend/actions/workflows/run-main.yml)
