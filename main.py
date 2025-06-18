@@ -599,22 +599,24 @@ def formatStackedGraph(abbr):
     with open(f'C:/Users/plaisancem/Documents/Dev/Apps/Prod/frontend/data/{abbr}/firstProdDate.json', 'w') as f:
         json.dump(first_prod,f)
     return
-
-def automated_report(receipent,wells):
-    #receipent = 'PlaisanceM@cmlexp.com'
-
-    bot = ReportBot(recipient=receipent,wells=wells)
-    relativePath,reportTitle = bot.genReport()
+SEND_EMAIL = False
+#def automated_report(receipent,wells):
     
-    attachments = [rf"C:\Users\plaisancem\Documents\Dev\Apps\Prod\backend\{relativePath['pdf']}",
-                   rf"C:\Users\plaisancem\Documents\Dev\Apps\Prod\backend\{relativePath['csv']}"]
-    bot.sendEmail(to_address=receipent,
-                  subject=reportTitle,
-                  body=f'Automated Report for {receipent.split('@')[-1].split('.')[0].upper()}\n\nThank you\nMatthew Plaisance\n512-971-9722\nCML Exploration LLC',
-                  attachments_paths=attachments,
-                  bcc_address='PlaisanceM@cmlexp.com'
-                  )
-    return
+#    if SEND_EMAIL:
+        #receipent = 'PlaisanceM@cmlexp.com'
+
+ #       bot = ReportBot(recipient=receipent,wells=wells)
+ #       relativePath,reportTitle = bot.genReport()
+ #       
+ #       attachments = [rf"C:\Users\plaisancem\Documents\Dev\Apps\Prod\backend\{relativePath['pdf']}",
+  #                  rf"C:\Users\plaisancem\Documents\Dev\Apps\Prod\backend\{relativePath['csv']}"]
+#        bot.sendEmail(to_address=receipent,
+  #                  subject=reportTitle,
+  #                  body=f'Automated Report for {receipent.split('@')[-1].split('.')[0].upper()}\n\nThank you\nMatthew Plaisance\n512-971-9722\nCML Exploration LLC',
+  #                  attachments_paths=attachments,
+   #                 bcc_address='PlaisanceM@cmlexp.com'
+ #                   )
+ #       return
 
 if __name__ == '__main__':
     #updateApp_tam('ST','data\misc\ST\TAM 6-5-25.csv')
